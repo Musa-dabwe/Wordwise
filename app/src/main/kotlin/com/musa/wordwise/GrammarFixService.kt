@@ -20,6 +20,11 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onServiceConnected() {
         apiKey = loadApiKey()
+        if (apiKey.isNotEmpty()) {
+            Log.d("GrammarFix", "API Key loaded successfully. Starts with: ${apiKey.take(5)}")
+        } else {
+            Log.e("GrammarFix", "API Key is missing. Please set it in the app.")
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {

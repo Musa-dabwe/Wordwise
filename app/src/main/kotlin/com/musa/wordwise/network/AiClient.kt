@@ -1,5 +1,6 @@
 package com.musa.wordwise.network
 
+import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -30,9 +31,17 @@ suspend fun fixGrammar(text: String, apiKey: String): String {
 
     val response = client.newCall(request).execute()
     return if (response.isSuccessful) {
-        val jsonObject = Json.parseToJsonElement(response.body!!.string()).jsonObject
-        jsonObject["choices"]!!.jsonArray[0].jsonObject["message"]!!.jsonObject["content"]!!.jsonPrimitive.content
+        try {
+            val responseBody = response.body?.string()
+            val jsonObject = Json.parseToJsonElement(responseBody!!).jsonObject
+            jsonObject["choices"]?.jsonArray?.get(0)?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.content ?: text
+        } catch (e: Exception) {
+            Log.e("GrammarFix", "JSON parsing failed", e)
+            text
+        }
     } else {
+        Log.e("GrammarFix", "API Error: ${response.code} ${response.message}")
+        Log.e("GrammarFix", "Response body: ${response.body?.string()}")
         text // Return original on failure
     }
 }
