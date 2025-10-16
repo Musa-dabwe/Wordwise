@@ -2,8 +2,10 @@ package com.musa.wordwise
 
 import android.accessibilityservice.AccessibilityService
 import android.os.Bundle
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Toast
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.musa.wordwise.network.fixGrammar
@@ -24,16 +26,22 @@ class GrammarFixService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
 
         val source = event.source ?: return
-        val text = source.text?.toString() ?: return
+        val text = event.text.joinToString("")
 
-        if (text.endsWith(shortcut)) {
-            val originalText = text.removeSuffix(shortcut).trim()
+        Log.d("GrammarFix", "Event: ${event.eventType}, Text: $text")
+
+        if (text.endsWith(shortcut) && text.length > shortcut.length) {
+            val originalText = text.dropLast(shortcut.length).trim()
+            Toast.makeText(this, "Fixing: $originalText", Toast.LENGTH_SHORT).show()
 
             CoroutineScope(Dispatchers.IO).launch {
-                val correctedText = fixGrammar(originalText, apiKey)
-
-                withContext(Dispatchers.Main) {
-                    replaceText(source, correctedText)
+                try {
+                    val correctedText = fixGrammar(originalText, apiKey)
+                    withContext(Dispatchers.Main) {
+                        replaceText(source, correctedText)
+                    }
+                } catch (e: Exception) {
+                    Log.e("GrammarFix", "AI failed", e)
                 }
             }
         }
