@@ -1,38 +1,350 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    tools:context=".MainActivity">
+    android:background="#1A1A1A"
+    android:fillViewport="true">
 
-    <EditText
-        android:id="@+id/apiKeyEditText"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Enter API Key"
-        android:inputType="textPassword" />
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <Button
-        android:id="@+id/saveApiKeyButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Save API Key" />
+        <!-- App Title -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="WordWise"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginBottom="8dp" />
 
-    <Button
-        android:id="@+id/openAccessibilitySettingsButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Enable Accessibility Service" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="AI-Powered Grammar Correction"
+            android:textSize="14sp"
+            android:textColor="#B8B8B8"
+            android:gravity="center"
+            android:layout_marginBottom="32dp" />
 
-    <TextView
-        android:id="@+id/serviceStatusTextView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Service Status: Disabled"
-        android:textSize="16sp" />
+        <!-- Step 1: API Key Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardBackgroundColor="#2A2A2A"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
 
-</LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="① Get Your Free API Key"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#C8B5FF"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="1. Visit aistudio.google.com\n2. Sign in with your Google account\n3. Click 'Get API Key' (top left)\n4. Copy the key\n\n✨ 100% FREE with 1,500 requests/day!"
+                    android:textSize="14sp"
+                    android:textColor="#D0D0D0"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="16dp" />
+
+                <EditText
+                    android:id="@+id/apiKeyEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Paste your Gemini API key here"
+                    android:textColorHint="#808080"
+                    android:textColor="#FFFFFF"
+                    android:background="@drawable/edit_text_background"
+                    android:padding="16dp"
+                    android:inputType="textPassword"
+                    android:fontFamily="monospace"
+                    android:textSize="13sp"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/saveApiKeyButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:text="Save API Key"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:backgroundTint="#C8B5FF"
+                    android:textColor="#1A1A1A"
+                    app:cornerRadius="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔒 Your key is encrypted and stored only on your device"
+                    android:textSize="12sp"
+                    android:textColor="#808080"
+                    android:gravity="center"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Step 2: Enable Service Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardBackgroundColor="#2A2A2A"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="② Enable Accessibility Service"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#C8B5FF"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tap the button below to open Accessibility settings, then find and enable WordWise."
+                    android:textSize="14sp"
+                    android:textColor="#D0D0D0"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="16dp" />
+
+                <Button
+                    android:id="@+id/openAccessibilitySettingsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:text="Open Accessibility Settings"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:backgroundTint="#C8B5FF"
+                    android:textColor="#1A1A1A"
+                    app:cornerRadius="8dp"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:background="#1A1A1A"
+                    android:padding="12dp"
+                    android:layout_marginTop="4dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Status: "
+                        android:textSize="14sp"
+                        android:textColor="#B8B8B8" />
+
+                    <TextView
+                        android:id="@+id/serviceStatusTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Disabled"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="#FF6B6B" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Step 3: Usage Instructions -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardBackgroundColor="#2A2A2A"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="③ Commands"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#C8B5FF"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Type your text in any app, then add one of these commands:"
+                    android:textSize="14sp"
+                    android:textColor="#D0D0D0"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Command 1: ?fixs -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1A1A1A"
+                    android:padding="16dp"
+                    android:layout_marginBottom="12dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="\?fixs - Fix Sentence"
+                        android:textSize="14sp"
+                        android:textColor="#C8B5FF"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Before:"
+                        android:textSize="11sp"
+                        android:textColor="#808080"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="i dont no how to spel?fixs"
+                        android:textSize="13sp"
+                        android:textColor="#FF6B6B"
+                        android:fontFamily="monospace"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="After:"
+                        android:textSize="11sp"
+                        android:textColor="#808080"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="I don't know how to spell."
+                        android:textSize="13sp"
+                        android:textColor="#51CF66"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <!-- Command 2: ?fixp -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1A1A1A"
+                    android:padding="16dp"
+                    android:layout_marginBottom="12dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="\?fixp - Fix Paragraph"
+                        android:textSize="14sp"
+                        android:textColor="#C8B5FF"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Use at the end of a paragraph to fix all sentences in it. Maintains paragraph structure and flow."
+                        android:textSize="12sp"
+                        android:textColor="#D0D0D0"
+                        android:lineSpacingExtra="4dp" />
+                </LinearLayout>
+
+                <!-- Command 3: ?fixo -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1A1A1A"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="\?fixo - Fix All Text"
+                        android:textSize="14sp"
+                        android:textColor="#C8B5FF"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Fixes everything in the text field - all sentences and paragraphs. Just type ?fixo anywhere to fix the entire message."
+                        android:textSize="12sp"
+                        android:textColor="#D0D0D0"
+                        android:lineSpacingExtra="4dp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="💡 Tips"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#C8B5FF"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• Works in any app (WhatsApp, Messages, Notes, etc.)\n• Wait 2-3 seconds for correction\n• Original text is replaced automatically\n• Use ?fixs for quick fixes, ?fixo for long texts\n• 100% FREE - powered by Google Gemini"
+                    android:textSize="13sp"
+                    android:textColor="#D0D0D0"
+                    android:lineSpacingExtra="4dp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Footer -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Made with ❤️ using Google Gemini"
+            android:textSize="12sp"
+            android:textColor="#808080"
+            android:gravity="center"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp" />
+
+    </LinearLayout>
+</ScrollView>
