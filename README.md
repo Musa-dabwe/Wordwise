@@ -43,17 +43,3 @@ The app will replace it with: `Hello world`
 *   **API Key Storage**: Your OpenAI API key is stored securely using Android's `EncryptedSharedPreferences`.
 *   **Text Processing**: The text you write is only sent to the OpenAI API when you use the `?fixg` shortcut. The app does not log or store your text.
 *   **Permissions**: The app only requires the "Bind Accessibility Service" permission to function.
-
-## Building the Project
-
-To build this project, you will need to have the Android SDK installed and configured. Create a `local.properties` file in the root of the project with the following content:
-
-```
-sdk.dir=<path_to_your_android_sdk>
-```
-
-Then, you can build the project using the following command:
-
-```bash
-./gradlew build
-```
