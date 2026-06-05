@@ -88,7 +88,6 @@ suspend fun fixGrammar(text: String, apiKey: String, mode: FixMode = FixMode.SEN
     }
     
     Log.d("GrammarFix", "Sending request to Gemini (Mode: $modeLabel)...")
-    Log.d("GrammarFix", "API Key starts with: ${apiKey.take(7)}...")
     Log.d("GrammarFix", "Text length: ${text.length} characters")
     
     // Gemini API endpoint
@@ -135,14 +134,10 @@ suspend fun fixGrammar(text: String, apiKey: String, mode: FixMode = FixMode.SEN
                 }
             } catch (e: Exception) {
                 Log.e("GrammarFix", "JSON parsing failed: ${e.message}", e)
-                Log.e("GrammarFix", "Response was: $responseBody")
                 return@withContext text
             }
         } else {
             Log.e("GrammarFix", "API Error: ${response.code} ${response.message}")
-            if (responseBody != null) {
-                Log.e("GrammarFix", "Error details: $responseBody")
-            }
             return@withContext text
         }
     } catch (e: Exception) {
