@@ -14,6 +14,9 @@ import com.musa.wordwise.network.FixMode
 import com.musa.wordwise.network.fixGrammar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -28,7 +31,8 @@ class GrammarFixService : AccessibilityService() {
     )
     
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isProcessing = false
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var pendingJob: Job? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -44,10 +48,43 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
-        if (isProcessing) return // Prevent multiple simultaneous requests
 
         val source = event.source ?: return
-        val currentText = event.text.joinToString("")
+
+        // TODO: verify inputType filtering on device
+        val inputType = source.inputType
+        val typeClass = inputType and android.text.InputType.TYPE_MASK_CLASS
+        val typeVariation = inputType and android.text.InputType.TYPE_MASK_VARIATION
+
+        val isSensitive = typeClass == android.text.InputType.TYPE_CLASS_TEXT && (
+            typeVariation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+            typeVariation == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+            typeVariation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+        ) || typeClass == android.text.InputType.TYPE_CLASS_NUMBER && (
+            typeVariation == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        )
+
+        if (isSensitive) {
+            source.recycle()
+            return
+        }
+
+        // Try multiple extraction sources: node text, node content description, then event text
+        val sourceText = source.text?.toString()
+        val sourceDescription = source.contentDescription?.toString()
+        val eventText = event.text.joinToString("")
+
+        val currentText = when {
+            !sourceText.isNullOrBlank() -> sourceText
+            !sourceDescription.isNullOrBlank() -> sourceDescription
+            !eventText.isBlank() -> eventText
+            else -> null
+        }
+
+        if (currentText == null) {
+            source.recycle()
+            return
+        }
 
         // Check which shortcut was used
         val detectedShortcut = shortcuts.keys.find { currentText.endsWith(it) }
@@ -55,22 +92,19 @@ class GrammarFixService : AccessibilityService() {
         if (detectedShortcut != null) {
             val mode = shortcuts[detectedShortcut]!!
             
-            // For ?fixo, get all text from the field
-            val textToFix = if (mode == FixMode.ALL) {
-                getAllTextFromField(source)
-            } else {
-                // For ?fixs and ?fixp, get text before the shortcut
-                currentText.dropLast(detectedShortcut.length).trim()
-            }
+            // Unify text extraction for all modes
+            val textToFix = currentText.dropLast(detectedShortcut.length).trim()
             
             if (textToFix.isEmpty()) {
                 Log.d("GrammarFix", "No text to fix")
                 showToast("No text found to fix")
+                source.recycle()
                 return
             }
 
             if (apiKey.isEmpty()) {
                 showToast("Please set your API key in WordWise app")
+                source.recycle()
                 return
             }
 
@@ -81,18 +115,18 @@ class GrammarFixService : AccessibilityService() {
             }
 
             Log.d("GrammarFix", "Shortcut '$detectedShortcut' detected! Mode: $modeLabel")
-            Log.d("GrammarFix", "Text to fix: '$textToFix' (${textToFix.length} chars)")
+            Log.d("GrammarFix", "Text to fix: ${textToFix.length} chars, mode: $modeLabel")
             
-            isProcessing = true
             showToast("Fixing $modeLabel...")
 
-            CoroutineScope(Dispatchers.Main).launch {
+            pendingJob?.cancel()
+            pendingJob = serviceScope.launch {
                 try {
                     val correctedText = withContext(Dispatchers.IO) {
                         fixGrammar(textToFix, apiKey, mode)
                     }
                     
-                    Log.d("GrammarFix", "Got corrected text: '$correctedText'")
+                    Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
                     
                     if (correctedText != textToFix) {
                         replaceText(source, correctedText)
@@ -104,25 +138,13 @@ class GrammarFixService : AccessibilityService() {
                     Log.e("GrammarFix", "Error fixing grammar: ${e.message}", e)
                     showToast("Error: ${e.message}")
                 } finally {
-                    isProcessing = false
+                    source.recycle()
                 }
             }
+        } else {
+            // Not our shortcut, but we must recycle the node
+            source.recycle()
         }
-    }
-
-    private fun getAllTextFromField(node: AccessibilityNodeInfo): String {
-        // Try to get text from the node
-        val nodeText = node.text?.toString() ?: ""
-        
-        // If node has text, remove any shortcuts from it
-        var cleanText = nodeText
-        shortcuts.keys.forEach { shortcut ->
-            if (cleanText.endsWith(shortcut)) {
-                cleanText = cleanText.dropLast(shortcut.length)
-            }
-        }
-        
-        return cleanText.trim()
     }
 
     private fun replaceText(node: AccessibilityNodeInfo, newText: String) {
@@ -147,6 +169,11 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.d("GrammarFix", "Service interrupted")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
     }
 
     private fun loadApiKey(): String {
