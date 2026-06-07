@@ -129,13 +129,14 @@ Context7 source: /kotlin/kotlinx.coroutines
 
 | Category | Total Findings | High Confidence | Safe to Remove |
 |---|---|---|---|
-| A — Unused Kotlin Declarations | 1 | 1 | 1 (conditional) |
+| A — Unused Kotlin Declarations | 0 | 0 | 0 |
 | B — Unreachable / Redundant Logic | 0 | 0 | 0 |
 | C — Unused Resources | 0 | 0 | 0 |
-| D — Unused Dependencies & Build Config | 3 | 3 | 3 |
-| E — Manifest & Service Config | 3 | 1 | 1 |
-| F — Obsolete Compatibility Code | 2 | 1 | 1 |
-| **Total** | **9** | **6** | **6 (5 unconditional + 1 conditional)** |
+| D — Unused Dependencies & Build Config | 0 | 0 | 0 |
+| E — Manifest & Service Config | 2 | 0 | 0 |
+| F — Obsolete Compatibility Code | 1 | 1 | 0 |
+| **Total** | **3** | **1** | **0** |
+* Updated after removal execution on 2026-06-07.
 
 ---
 
@@ -200,3 +201,33 @@ Context7 source: /kotlin/kotlinx.coroutines
 - Override functions in `GrammarFixService` — all required by AccessibilityService lifecycle.
 - All string resources — both are referenced.
 - All view IDs — all used via ViewBinding.
+
+---
+
+## Removal Execution Log
+
+**Executed by:** Jules
+**Execution date:** 2026-06-07
+**Build result:** BUILD SUCCESSFUL
+
+| ID | Removal | Status | Notes |
+|---|---|---|---|
+| DC-05 | flagDefault attribute | Removed | Confirmed redundant as implicit default. |
+| DC-09 | Redundant withContext | Removed | Confirmed redundant as AiClient handles its own switching. |
+| DC-01 | withContext import | Removed | Cleaned up after DC-09 removal. |
+| DC-02 | preference-ktx dep | Removed | Confirmed unused in source. |
+| DC-03 | constraintlayout dep | Removed | Confirmed unused in layouts. |
+| DC-04 | $$serializer rule | Removed | Confirmed tree-based JSON parsing needs no keep rule. |
+
+**Context7 findings summary:**
+DC-05: Confirmed flagDefault is the implicit default in AccessibilityServiceInfo.
+DC-09: Confirmed withContext avoids re-dispatching if already on target dispatcher.
+DC-01: Confirmed unused imports should be removed for compiler cleanliness.
+DC-02: Confirmed preference-ktx symbols are absent from project source.
+DC-03: Confirmed ConstraintLayout dependency is unnecessary for existing linear/scroll layouts.
+DC-04: Confirmed buildJsonObject/parseToJsonElement usage does not generate classes matching this keep rule.
+
+**Items deferred to future work:**
+- DC-06: tools namespace in themes.xml — low risk, may cause IDE lint noise
+- DC-07: android:roundIcon — convention, keep for round icon support
+- DC-08: Deprecated MasterKeys API in ApiKeyRepository — needs replacement with MasterKey.Builder, tracked as a separate refactor task

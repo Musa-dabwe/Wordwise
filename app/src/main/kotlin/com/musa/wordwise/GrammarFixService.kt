@@ -17,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class GrammarFixService : AccessibilityService() {
     @Suppress("DEPRECATION")
@@ -130,9 +129,8 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    val correctedText = withContext(Dispatchers.IO) {
-                        AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
-                    }
+                    // Context7: withContext avoids redundant thread hops if already on the same dispatcher, making this outer wrapper unnecessary since AiClient.fixGrammar is already IO-bound.
+                    val correctedText = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
                     
                     Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
                     

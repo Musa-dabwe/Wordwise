@@ -15,9 +15,6 @@
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
--keepclasseswithmembers class **$$serializer {
-    kotlinx.serialization.descriptors.SerialDescriptor descriptor;
-}
 
 # OkHttp
 -dontwarn okhttp3.**
