@@ -48,8 +48,7 @@ The following items were identified during the recent security audit:
 If you discover a security vulnerability, please report it:
 1. Open a GitHub issue with `[SECURITY]` in the title.
 2. For sensitive issues, please contact the maintainer privately at:
-<!-- TODO: Fill this in before publishing -->
-`[MAINTAINER_EMAIL or GitHub profile URL]`
+foxxmusa@gmail.com
 
 We do not currently have a bug bounty program.
 
