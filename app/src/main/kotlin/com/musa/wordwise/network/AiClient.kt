@@ -91,7 +91,7 @@ suspend fun fixGrammar(text: String, apiKey: String, mode: FixMode = FixMode.SEN
     Log.d("GrammarFix", "Text length: ${text.length} characters")
     
     // Gemini API endpoint
-    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=$apiKey"
     
     val request = Request.Builder()
         .url(url)
