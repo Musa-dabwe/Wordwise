@@ -58,7 +58,7 @@ WordWise is designed with security as a priority:
 ## Limitations
 
 - **Accessibility Permission**: Requires broad accessibility permissions to monitor and replace text, which is inherent to how the app functions.
-- **App Compatibility**: Text replacement may not function correctly in some apps, such as those using WebViews or highly custom UI frameworks.
+- **App Compatibility**: Text replacement may not function correctly in some apps, such as those using WebViews or highly custom UI frameworks. WordWise will now notify you with a toast if replacement fails.
 - **Connectivity**: Requires an active internet connection to communicate with the Gemini API. No offline mode is available.
 
 ## Tech Stack

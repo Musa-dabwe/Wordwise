@@ -20,7 +20,7 @@ WordWise is committed to protecting user privacy and data security. As an access
 - **Accessibility Service Scope**: By design, WordWise requires the `BIND_ACCESSIBILITY_SERVICE` permission. This is a broad permission that allows the app to see and interact with screen content. Users must trust the application to handle this responsibility.
 - **API Key Transmission**: The Gemini API requires the API key to be passed as a URL query parameter (`?key=...`). This is the standard Google authentication mechanism for this API. While encrypted via TLS, it remains visible in the full URL of the request.
 - **Text Transmission**: Text is processed off-device. When a shortcut is triggered, the text is sent to Google's servers for correction.
-- **`recycle()` Deprecation**: The code uses `AccessibilityNodeInfo.recycle()`. While deprecated in API 33+, it remains safe as the framework handles it automatically in newer versions.
+- **`recycle()` Deprecation**: The code uses a `safeRecycle()` extension to handle `AccessibilityNodeInfo` cleanup, suppressing deprecation warnings while maintaining compatibility.
 
 ## Resolved Security Issues
 
@@ -39,7 +39,7 @@ The following items were identified during the recent security audit:
 
 | Finding | Severity | Status | Recommendation |
 |---------|----------|--------|----------------|
-| **Alpha Dependency** | Low | Open | Upgrade `androidx.security:security-crypto` from `1.1.0-alpha06` to `1.0.0` stable when possible. |
+| **Alpha Dependency** | Low | Fixed | Upgraded `androidx.security:security-crypto` to `1.0.0` stable. |
 | **URL API Key** | Informational | Accepted Risk | Standard Gemini API mechanism; no action needed. |
 | **Broad Permissions** | Informational | Accepted Risk | Required for app functionality; documented in README. |
 
@@ -56,6 +56,6 @@ We do not currently have a bug bounty program.
 
 | Library | Version | Role |
 |---------|---------|------|
-| `androidx.security:security-crypto` | `1.1.0-alpha06` | AES-256-GCM encryption for keys |
+| `androidx.security:security-crypto` | `1.0.0` (stable) | AES-256-GCM encryption for keys |
 | `okhttp3:okhttp` | `4.12.0` | Secure TLS networking |
 | `kotlinx.coroutines` | `1.7.3` | Async task management |

@@ -20,6 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class GrammarFixService : AccessibilityService() {
+    @Suppress("DEPRECATION")
+    private fun AccessibilityNodeInfo.safeRecycle() = recycle()
+
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
     
     // Define shortcuts and their modes
@@ -63,7 +66,7 @@ class GrammarFixService : AccessibilityService() {
         )
 
         if (isSensitive) {
-            source.recycle()
+            source.safeRecycle()
             return
         }
 
@@ -80,7 +83,7 @@ class GrammarFixService : AccessibilityService() {
         }
 
         if (currentText == null) {
-            source.recycle()
+            source.safeRecycle()
             return
         }
 
@@ -96,13 +99,13 @@ class GrammarFixService : AccessibilityService() {
             if (textToFix.isEmpty()) {
                 Log.d("GrammarFix", "No text to fix")
                 showToast("No text found to fix")
-                source.recycle()
+                source.safeRecycle()
                 return
             }
 
             if (!apiKeyRepository.hasApiKey()) {
                 showToast("Please set your API key in WordWise app")
-                source.recycle()
+                source.safeRecycle()
                 return
             }
 
@@ -120,6 +123,13 @@ class GrammarFixService : AccessibilityService() {
             pendingJob?.cancel()
             pendingJob = serviceScope.launch {
                 try {
+                    // Strip shortcut immediately before API call
+                    val stripped = replaceText(source, textToFix)
+                    if (!stripped) {
+                        // replaceText already showed toast and logged warning
+                        return@launch
+                    }
+
                     val correctedText = withContext(Dispatchers.IO) {
                         AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
                     }
@@ -130,23 +140,23 @@ class GrammarFixService : AccessibilityService() {
                         replaceText(source, correctedText)
                         showToast("✓ Fixed $modeLabel!")
                     } else {
-                        showToast("No changes needed or API error")
+                        showToast("Could not reach Gemini — shortcut removed, text unchanged.")
                     }
                 } catch (e: Exception) {
                     Log.e("GrammarFix", "Error fixing grammar: ${e.message}", e)
                     showToast("Error: ${e.message}")
                 } finally {
-                    source.recycle()
+                    source.safeRecycle()
                 }
             }
         } else {
             // Not our shortcut, but we must recycle the node
-            source.recycle()
+            source.safeRecycle()
         }
     }
 
-    private fun replaceText(node: AccessibilityNodeInfo, newText: String) {
-        try {
+    private fun replaceText(node: AccessibilityNodeInfo, newText: String): Boolean {
+        return try {
             val arguments = Bundle()
             arguments.putCharSequence(
                 AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
@@ -156,12 +166,13 @@ class GrammarFixService : AccessibilityService() {
             Log.d("GrammarFix", "Text replacement ${if (success) "succeeded" else "failed"}")
             
             if (!success) {
-                // Try alternative method
-                node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+                Log.w("GrammarFix", "ACTION_SET_TEXT failed on ${node.className}")
+                showToast("Could not replace text in this field. Try a standard text input field.")
             }
+            success
         } catch (e: Exception) {
             Log.e("GrammarFix", "Failed to replace text: ${e.message}", e)
+            false
         }
     }
 
