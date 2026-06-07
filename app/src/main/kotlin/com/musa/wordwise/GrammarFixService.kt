@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class GrammarFixService : AccessibilityService() {
     @Suppress("DEPRECATION")
@@ -129,7 +130,9 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    val correctedText = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
+                    val correctedText = withContext(Dispatchers.IO) {
+                        AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
+                    }
                     
                     Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
                     
