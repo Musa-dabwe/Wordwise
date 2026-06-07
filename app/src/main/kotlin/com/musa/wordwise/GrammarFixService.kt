@@ -8,10 +8,9 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.network.AiClient
 import com.musa.wordwise.network.FixMode
-import com.musa.wordwise.network.fixGrammar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class GrammarFixService : AccessibilityService() {
-    private var apiKey: String = ""
+    private val apiKeyRepository by lazy { ApiKeyRepository(this) }
     
     // Define shortcuts and their modes
     private val shortcuts = mapOf(
@@ -36,9 +35,8 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        apiKey = loadApiKey()
-        if (apiKey.isNotEmpty()) {
-            Log.d("GrammarFix", "Service connected! API Key loaded: ${apiKey.take(7)}...")
+        if (apiKeyRepository.hasApiKey()) {
+            Log.d("GrammarFix", "Service connected! API Key is present.")
             showToast("WordWise is ready! Commands: ?fixs (sentence), ?fixp (paragraph), ?fixo (all)")
         } else {
             Log.e("GrammarFix", "API Key is missing! Please set it in the app.")
@@ -102,7 +100,7 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-            if (apiKey.isEmpty()) {
+            if (!apiKeyRepository.hasApiKey()) {
                 showToast("Please set your API key in WordWise app")
                 source.recycle()
                 return
@@ -123,7 +121,7 @@ class GrammarFixService : AccessibilityService() {
             pendingJob = serviceScope.launch {
                 try {
                     val correctedText = withContext(Dispatchers.IO) {
-                        fixGrammar(textToFix, apiKey, mode)
+                        AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
                     }
                     
                     Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
@@ -174,28 +172,6 @@ class GrammarFixService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
-    }
-
-    private fun loadApiKey(): String {
-        return try {
-            val masterKey = MasterKey.Builder(this)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-
-            val sharedPreferences = EncryptedSharedPreferences.create(
-                this,
-                "secret_keys",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-            val key = sharedPreferences.getString("api_key", "") ?: ""
-            Log.d("GrammarFix", "Loaded API key: ${if (key.isEmpty()) "EMPTY" else "Present (${key.length} chars)"}")
-            key
-        } catch (e: Exception) {
-            Log.e("GrammarFix", "Failed to load API key: ${e.message}", e)
-            ""
-        }
     }
 
     private fun showToast(message: String) {
