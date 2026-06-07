@@ -1,45 +1,70 @@
-# WordWise - AI-Powered Autocorrect
+# WordWise
 
-WordWise is an Android application that provides system-wide grammar correction using the power of AI. It leverages an Accessibility Service to monitor text input and a custom shortcut to trigger grammar and spelling fixes in any app.
+System-wide grammar correction for Android using the Gemini API.
 
-## How it Works
+WordWise is an Android accessibility service that intercepts text input and sends it to the Google Gemini API for professional grammar and style correction. It operates within any app, triggered by simple text shortcuts.
 
-The app uses an Accessibility Service to watch for text changes. When you type the shortcut `?fixg` at the end of a sentence or phrase, the app will:
+<!-- TODO: Add screenshot of MainActivity -->
 
-1.  Detect the shortcut and remove it from the text.
-2.  Send the remaining text to the OpenAI API for grammar correction.
-3.  Replace the original text with the corrected version provided by the AI.
+## How It Works
+
+WordWise leverages Android's AccessibilityService to monitor `typeViewTextChanged` events. It intelligently detects specific shortcuts typed at the end of your text and replaces the original text with a corrected version.
+
+- **Intelligent Monitoring**: The service only processes text when one of the three trigger shortcuts is detected.
+- **Three Shortcut Modes**:
+  - `?fixs`: Corrects the preceding sentence.
+  - `?fixp`: Corrects the preceding paragraph.
+  - `?fixo`: Corrects all text within the current input field.
+- **Privacy First**: Sensitive fields (passwords, PINs, etc.) are automatically skipped to ensure your credentials are never processed.
+- **Powered by Gemini**: Uses the `gemini-2.5-flash-lite` model for fast, high-quality corrections.
 
 ## Setup
 
-To use WordWise, you need to perform two setup steps:
-
-1.  **Enter your OpenAI API Key**:
-    *   Open the WordWise app.
-    *   Enter your OpenAI API key in the text field.
-    *   Tap the "Save API Key" button. The key is stored securely on your device using `EncryptedSharedPreferences`.
-
-2.  **Enable the Accessibility Service**:
-    *   After saving your API key, tap the "Enable Accessibility Service" button.
-    *   This will take you to your device's Accessibility settings.
-    *   Find "WordWise" in the list of services and turn it on.
+1. **Get a Gemini API Key**: Visit [Google AI Studio](https://aistudio.google.com) to generate a free API key.
+2. **Configure WordWise**: Open the WordWise app, enter your API key, and tap **Save API Key**. Your key is stored securely using `EncryptedSharedPreferences`.
+3. **Enable the Service**: Tap **Enable Accessibility Service** to open your device settings, find "WordWise" in the list of services, and turn it on.
 
 ## Usage
 
-Once the setup is complete, you can use WordWise in any app that has a text field (e.g., messaging apps, note-taking apps, email clients).
+Simply type your text in any app, followed by one of the shortcuts.
 
-1.  Type the text you want to correct.
-2.  At the end of your text, type the shortcut `?fixg`.
-3.  The app will automatically correct the text and replace it in the text field.
+### Examples
 
-**Example:**
+- **Sentence Correction (`?fixs`)**
+  - Type: `The meeting start at 9am?fixs`
+  - Result: `The meeting starts at 9:00 AM.`
 
-If you type: `helo world?fixg`
+- **Paragraph Correction (`?fixp`)**
+  - Type: `i went to the store today. i bought some milk and bread. it was very crowded?fixp`
+  - Result: `I went to the store today and bought some milk and bread. It was very crowded.`
 
-The app will replace it with: `Hello world`
+- **Full Field Correction (`?fixo`)**
+  - Type: `[Entire block of text]?fixo`
+  - Result: `[Grammatically corrected version of the entire block]`
 
-## Security and Privacy
+<!-- TODO: Add demo gif of ?fixs in action -->
 
-*   **API Key Storage**: Your OpenAI API key is stored securely using Android's `EncryptedSharedPreferences`.
-*   **Text Processing**: The text you write is only sent to the OpenAI API when you use the `?fixg` shortcut. The app does not log or store your text.
-*   **Permissions**: The app only requires the "Bind Accessibility Service" permission to function.
+## Security & Privacy
+
+WordWise is designed with security as a priority:
+
+- **Secure Key Storage**: API keys are stored using `EncryptedSharedPreferences` (AES-256-GCM).
+- **Sensitive Field Filtering**: The app explicitly skips fields marked as passwords or sensitive numeric inputs.
+- **Zero Logging**: User text and API keys are never logged to Logcat or any external server (other than the Gemini API).
+- **Network Security**: Cleartext traffic is disabled via `network_security_config.xml`, ensuring all API communication is encrypted.
+- **Minimal Transmission**: Text is only sent to Google Gemini when a shortcut is explicitly typed.
+- **API Authentication**: The API key is transmitted as a URL query parameter, which is the standard mechanism for the Gemini API.
+
+## Limitations
+
+- **Accessibility Permission**: Requires broad accessibility permissions to monitor and replace text, which is inherent to how the app functions.
+- **App Compatibility**: Text replacement may not function correctly in some apps, such as those using WebViews or highly custom UI frameworks.
+- **Connectivity**: Requires an active internet connection to communicate with the Gemini API. No offline mode is available.
+
+## Tech Stack
+
+- **Language**: Kotlin
+- **Networking**: OkHttp
+- **Serialization**: kotlinx.serialization
+- **Storage**: EncryptedSharedPreferences (Android Jetpack Security)
+- **AI**: Google Gemini API (`gemini-2.5-flash-lite`)
