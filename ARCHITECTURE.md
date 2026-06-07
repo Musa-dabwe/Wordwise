@@ -47,7 +47,7 @@ graph TD
 
 ## Known Limitations
 
-- **`recycle()` Deprecation**: The code calls `recycle()` on `AccessibilityNodeInfo`. On API 33+, this is a no-op as the framework handles it, but it is maintained for backward compatibility.
+- **`safeRecycle()` Extension**: Uses a private extension function with `@Suppress("DEPRECATION")` to call `recycle()` on `AccessibilityNodeInfo`. This suppresses API 33 deprecation warnings while preserving minSdk compatibility for older Android versions.
 - **Text Replacement Reliability**: Replacement may fail in complex views (e.g., certain WebViews or custom-drawn text editors) that do not properly implement the accessibility `ACTION_SET_TEXT` protocol.
 - **Single Pending Job**: Only one correction can be in-flight at a time. If a user triggers a second shortcut before the first one completes, the first one is cancelled.
 - **inputType Edge Cases**: While standard password fields are filtered, custom keyboard implementations or non-standard apps may occasionally use `inputType` values that bypass current filters.
@@ -56,6 +56,7 @@ graph TD
 
 | Category | Summary of Fixes |
 |----------|------------------|
+| **Accessibility** | Resolved EDGE-5 (shortcut left in field) and EDGE-2 (missing failure feedback). |
 | **Functional** | Fixed text extraction for shortcuts; implemented full field reading. |
 | **Memory** | Implemented proper node recycling in `finally` blocks to prevent leaks. |
 | **Concurrency** | Migrated to tracked `pendingJob` with proper cancellation logic. |
