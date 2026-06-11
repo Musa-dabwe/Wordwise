@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.doOnTextChanged
 import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.databinding.ActivityMainBinding
 
@@ -39,6 +40,10 @@ class MainActivity : AppCompatActivity() {
         // Load existing API key if present
         loadExistingApiKey()
 
+        binding.apiKeyEditText.doOnTextChanged { _, _, _, _ ->
+            binding.apiKeyInputLayout.error = null
+        }
+
         binding.saveApiKeyButton.setOnClickListener {
             val apiKey = binding.apiKeyEditText.text.toString().trim()
             if (apiKey.isNotEmpty()) {
@@ -46,14 +51,15 @@ class MainActivity : AppCompatActivity() {
                 if (apiKey.startsWith("AIza") || apiKey.length > 30) {
                     saveApiKey(apiKey)
                     Toast.makeText(this, getString(R.string.toast_api_key_saved), Toast.LENGTH_SHORT).show()
-                    // Clear field; inputType="textPassword" handles masking if we were to keep text
-                    binding.apiKeyEditText.text = null
-                    binding.apiKeyEditText.hint = getString(R.string.api_key_hint)
+                    binding.apiKeyInputLayout.helperText = getString(R.string.key_saved_indicator)
+                    binding.apiKeyInputLayout.error = null
                 } else {
-                    Toast.makeText(this, getString(R.string.toast_invalid_api_key), Toast.LENGTH_LONG).show()
+                    binding.apiKeyInputLayout.error = getString(R.string.toast_invalid_api_key)
+                    binding.apiKeyInputLayout.helperText = null
                 }
             } else {
-                Toast.makeText(this, getString(R.string.toast_api_key_empty), Toast.LENGTH_SHORT).show()
+                binding.apiKeyInputLayout.error = getString(R.string.key_empty_error)
+                binding.apiKeyInputLayout.helperText = null
             }
         }
 
@@ -98,8 +104,8 @@ class MainActivity : AppCompatActivity() {
     private fun loadExistingApiKey() {
         val existingKey = apiKeyRepository.getApiKey()
         if (existingKey.isNotEmpty()) {
-            // Hint that key is saved; inputType handles password dotting if we showed it
-            binding.apiKeyEditText.hint = getString(R.string.api_key_hint)
+            binding.apiKeyEditText.setText(existingKey)
+            binding.apiKeyInputLayout.helperText = getString(R.string.key_saved_indicator)
         }
     }
 

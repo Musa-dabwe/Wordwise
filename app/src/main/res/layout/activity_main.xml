@@ -78,6 +78,7 @@
                     android:layout_marginTop="4dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/apiKeyInputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -86,7 +87,13 @@
                     app:boxStrokeWidth="1dp"
                     app:boxStrokeWidthFocused="1dp"
                     app:hintEnabled="false"
-                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.WordWise.Input">
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.WordWise.Input"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/ww_accent"
+                    app:passwordToggleContentDescription="@string/toggle_key_visibility"
+                    app:helperTextEnabled="true"
+                    app:helperText=""
+                    app:helperTextTextColor="@color/ww_status_enabled">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/apiKeyEditText"
