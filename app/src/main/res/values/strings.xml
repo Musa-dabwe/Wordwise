@@ -34,4 +34,7 @@
     <string name="toast_invalid_api_key">Invalid API key format. Get your key from aistudio.google.com</string>
     <string name="toast_api_key_empty">API Key cannot be empty</string>
     <string name="toast_accessibility_hint">Find and enable WordWise in the list</string>
+    <string name="toggle_key_visibility">Toggle API key visibility</string>
+    <string name="key_saved_indicator">✓ Key saved and encrypted on device</string>
+    <string name="key_empty_error">Please enter a valid API key</string>
 </resources>
