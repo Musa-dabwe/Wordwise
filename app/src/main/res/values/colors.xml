@@ -1,2 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <!-- Backgrounds -->
+    <color name="ww_bg_primary">#121212</color>
+    <color name="ww_bg_surface">#1E1E1E</color>
+    <color name="ww_bg_inset">#252525</color>
+
+    <!-- Accent -->
+    <color name="ww_accent">#9B8EC4</color>
+    <color name="ww_accent_button">#7C6FAF</color>
+
+    <!-- Text -->
+    <color name="ww_text_primary">#FFFFFF</color>
+    <color name="ww_text_secondary">#9E9E9E</color>
+    <color name="ww_text_hint">#616161</color>
+
+    <!-- Status -->
+    <color name="ww_status_enabled">#4CAF50</color>
+    <color name="ww_status_disabled">#F44336</color>
+
+    <!-- Input -->
+    <color name="ww_input_bg">#2A2A2A</color>
+    <color name="ww_input_stroke">#3A3A3A</color>
+</resources>

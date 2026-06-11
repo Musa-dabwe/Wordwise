@@ -8,6 +8,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.databinding.ActivityMainBinding
 
@@ -21,6 +25,17 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Transparent status bar
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+
+        // Dynamic header padding for status bar
+        ViewCompat.setOnApplyWindowInsetsListener(binding.headerLayout) { view, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top
+            view.setPadding(0, statusBarHeight + 24, 0, 0)
+            insets
+        }
+
         // Load existing API key if present
         loadExistingApiKey()
 
@@ -30,21 +45,22 @@ class MainActivity : AppCompatActivity() {
                 // Validate Gemini API key format (typically starts with AIza)
                 if (apiKey.startsWith("AIza") || apiKey.length > 30) {
                     saveApiKey(apiKey)
-                    Toast.makeText(this, "✅ API Key saved securely!", Toast.LENGTH_SHORT).show()
-                    // Clear the field for security
-                    binding.apiKeyEditText.setText("••••••••••••••••")
+                    Toast.makeText(this, getString(R.string.toast_api_key_saved), Toast.LENGTH_SHORT).show()
+                    // Clear field; inputType="textPassword" handles masking if we were to keep text
+                    binding.apiKeyEditText.text = null
+                    binding.apiKeyEditText.hint = getString(R.string.api_key_hint)
                 } else {
-                    Toast.makeText(this, "⚠️ Invalid API key format. Get your key from aistudio.google.com", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, getString(R.string.toast_invalid_api_key), Toast.LENGTH_LONG).show()
                 }
             } else {
-                Toast.makeText(this, "❌ API Key cannot be empty", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_api_key_empty), Toast.LENGTH_SHORT).show()
             }
         }
 
         binding.openAccessibilitySettingsButton.setOnClickListener {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             startActivity(intent)
-            Toast.makeText(this, "Find and enable 'WordWise' in the list", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_accessibility_hint), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -55,11 +71,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateServiceStatus() {
         if (isAccessibilityServiceEnabled(this, GrammarFixService::class.java)) {
-            binding.serviceStatusTextView.text = "Enabled ✓"
-            binding.serviceStatusTextView.setTextColor(Color.parseColor("#51CF66"))
+            binding.serviceStatusTextView.text = getString(R.string.status_enabled)
+            binding.serviceStatusTextView.setTextColor(
+                ContextCompat.getColor(this, R.color.ww_status_enabled)
+            )
         } else {
-            binding.serviceStatusTextView.text = "Disabled"
-            binding.serviceStatusTextView.setTextColor(Color.parseColor("#FF6B6B"))
+            binding.serviceStatusTextView.text = getString(R.string.status_disabled)
+            binding.serviceStatusTextView.setTextColor(
+                ContextCompat.getColor(this, R.color.ww_status_disabled)
+            )
         }
     }
 
@@ -78,9 +98,8 @@ class MainActivity : AppCompatActivity() {
     private fun loadExistingApiKey() {
         val existingKey = apiKeyRepository.getApiKey()
         if (existingKey.isNotEmpty()) {
-            // Show masked version if key exists
-            binding.apiKeyEditText.setText("••••••••••••••••")
-            binding.apiKeyEditText.hint = "API key already saved"
+            // Hint that key is saved; inputType handles password dotting if we showed it
+            binding.apiKeyEditText.hint = getString(R.string.api_key_hint)
         }
     }
 
