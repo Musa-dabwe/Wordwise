@@ -10,12 +10,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-enum class FixMode {
-    SENTENCE,  // ?fixs - Fix a single sentence
-    PARAGRAPH, // ?fixp - Fix a paragraph
-    ALL        // ?fixo - Fix all text in field
-}
-
 object AiClient {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -23,41 +17,45 @@ object AiClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun fixGrammar(text: String, apiKey: String, mode: FixMode = FixMode.SENTENCE): String = withContext(Dispatchers.IO) {
+    suspend fun fixGrammar(text: String, apiKey: String): String = withContext(Dispatchers.IO) {
         if (apiKey.isEmpty()) {
             Log.e("GrammarFix", "API Key is empty!")
             return@withContext text
         }
 
-        // Create different prompts based on mode
-        val prompt = when (mode) {
-            FixMode.SENTENCE -> """
-                Fix all grammar, spelling, and punctuation errors in this sentence.
-                Only output the corrected sentence with no explanations or extra commentary.
-                Preserve the original meaning and tone.
+        // UNIFIED GRAMMAR CORRECTION PROMPT — WordWise v2
+        // Temperature: 0.1 — deterministic correction with minimal entropy
+        // for ambiguous cases (British/American spelling, context-dependent homonyms)
+        val prompt = """
+            Correct grammar, spelling, and punctuation in the text below.
 
-                Sentence: $text
-            """.trimIndent()
-            
-            FixMode.PARAGRAPH -> """
-                Fix all grammar, spelling, and punctuation errors in this paragraph.
-                Maintain proper paragraph structure and flow.
-                Only output the corrected paragraph with no explanations or extra commentary.
-                Preserve the original meaning and tone.
+            RULES:
 
-                Paragraph: $text
-            """.trimIndent()
-            
-            FixMode.ALL -> """
-                Fix all grammar, spelling, and punctuation errors in this entire text.
-                Maintain the structure of multiple sentences and paragraphs.
-                Keep line breaks and paragraph separations.
-                Only output the corrected text with no explanations or extra commentary.
-                Preserve the original meaning and tone.
+            1. LANGUAGE — Automatically detect the input language and correct within
+            that language. NEVER translate. If the input mixes multiple languages,
+            preserve the mix and correct each segment in its own language.
+            Supported languages include: Swahili, Chinyanja, Nyanja, Bemba, Tonga, Lozi, Kaonde, Luvale, Zulu, Xhosa, Shona, Ndebele, Sotho, Tswana, Venda, Tsonga, Afrikaans, Amharic, Hausa, Yoruba, Igbo, Twi, Wolof, Somali, Tigrinya, Oromo, Kinyarwanda, Kirundi, Luganda, Lingala, Kikuyu, Dholuo, Fula, Bambara, Ewe, Akan, Ga, Igala, Kanuri, Malagasy, Sango, Chichewa, English, French, Spanish, Portuguese, German, Italian, Dutch, Russian, Polish, Ukrainian, Romanian, Czech, Slovak, Hungarian, Greek, Swedish, Norwegian, Danish, Finnish, Croatian, Serbian, Bulgarian, Catalan, Turkish, Albanian, Macedonian, Slovenian, Estonian, Latvian, Lithuanian, Welsh, Irish, Basque, Maltese, Icelandic, Luxembourgish, Belarusian, Georgian, Armenian, Azerbaijani, Mandarin Chinese, Cantonese, Japanese, Korean, Hindi, Bengali, Urdu, Tamil, Telugu, Marathi, Gujarati, Punjabi, Kannada, Malayalam, Odia, Assamese, Nepali, Sinhala, Thai, Vietnamese, Indonesian, Malay, Tagalog, Burmese, Khmer, Lao, Javanese, Sundanese, Cebuano, Mongolian, Tibetan, Uyghur, Kazakh, Uzbek, Kyrgyz, Tajik, Turkmen, Pashto, Dari, Farsi, Kurdish, Hebrew, Arabic, Aramaic, Haitian Creole, Jamaican Patois, Quechua, Guaraní, Nahuatl, Māori, Hawaiian, Samoan, Tongan, Fijian, Tok Pisin.
 
-                Text: $text
-            """.trimIndent()
-        }
+            2. STRUCTURE — Preserve ALL line breaks, paragraph separations, and
+            sentence boundaries exactly as written. NEVER merge two sentences into
+            one. NEVER split one sentence into two. NEVER reorder content.
+
+            3. TONE — Preserve the original tone, style, and meaning. Do not rephrase
+            for style. Do not add words not implied. Do not remove words unless they
+            are clearly duplicates or errors.
+
+            4. OUTPUT — Output ONLY the corrected text. No explanations, no
+            commentary, no labels, no quotation marks. If the text is already
+            correct, return it exactly as received.
+
+            5. SHORT TEXT — If the input is one or two words, correct obvious spelling
+            errors only. Do not add punctuation that was not there.
+
+            6. CODE-SWITCHING — If the input mixes two or more languages, treat each
+            segment in its own language context. Do not normalize to a single language.
+
+            Text: $text
+        """.trimIndent()
 
         // Build JSON for Gemini API
         val jsonBody = buildJsonObject {
@@ -72,24 +70,14 @@ object AiClient {
             }
             putJsonObject("generationConfig") {
                 put("temperature", 0.1)
-                put("maxOutputTokens", when (mode) {
-                    FixMode.SENTENCE -> 500
-                    FixMode.PARAGRAPH -> 1500
-                    FixMode.ALL -> 4000
-                })
+                put("maxOutputTokens", 4000)
             }
         }
 
         val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
 
-        val modeLabel = when (mode) {
-            FixMode.SENTENCE -> "SENTENCE"
-            FixMode.PARAGRAPH -> "PARAGRAPH"
-            FixMode.ALL -> "ALL TEXT"
-        }
-
-        Log.d("GrammarFix", "Sending request to Gemini (Mode: $modeLabel)...")
-        Log.d("GrammarFix", "Text length: ${text.length} characters")
+        Log.d("GrammarFix", "Sending request to Gemini...")
+        Log.d("GrammarFix", "Input length: ${text.length} chars")
 
         // Gemini API endpoint
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=$apiKey"
@@ -126,8 +114,8 @@ object AiClient {
                         ?.trim()
 
                     if (correctedText != null && correctedText.isNotEmpty()) {
-                        Log.d("GrammarFix", "Success! Mode: $modeLabel")
-                        Log.d("GrammarFix", "Original length: ${text.length}, Corrected length: ${correctedText.length}")
+                        Log.d("GrammarFix", "Success!")
+                        Log.d("GrammarFix", "Output length: ${correctedText.length} chars")
                         return@withContext correctedText
                     } else {
                         Log.e("GrammarFix", "Corrected text is empty")

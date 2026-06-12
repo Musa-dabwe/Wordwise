@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">WordWise</string>
-    <string name="accessibility_service_description">WordWise monitors your text input and fixes grammar when you use commands like ?fixs, ?fixp, or ?fixo. Your text is processed privately using your own API key.</string>
+    <string name="accessibility_service_description">WordWise monitors your text input and fixes grammar when you use the ?fix command. Your text is processed privately using your own API key.</string>
 
     <string name="app_subtitle">System-wide grammar correction</string>
     <string name="section_api_key">1. Get Your API Key</string>
@@ -14,21 +14,15 @@
     <string name="open_accessibility_settings">Open Accessibility Settings</string>
 
     <string name="api_key_hint">Paste your Gemini API key here</string>
-    <string name="commands_description">Type these commands in any app:</string>
-    <string name="cmd_fixs_label">\?fixs</string>
-    <string name="cmd_fixs_desc"> - Fix Sentence</string>
-    <string name="cmd_fixs_before">Before: i dont no how to spel\?fixs</string>
-    <string name="cmd_fixs_after">After: I don\'t know how to spell.</string>
-    <string name="cmd_fixp_label">\?fixp</string>
-    <string name="cmd_fixp_desc"> - Fix Paragraph</string>
-    <string name="cmd_fixp_helper">Use at the end of a paragraph to fix all sentences.</string>
-    <string name="cmd_fixo_label">\?fixo</string>
-    <string name="cmd_fixo_desc"> - Fix All Text</string>
-    <string name="cmd_fixo_helper">Fixes everything in the text field. Just type \?fixo anywhere.</string>
+    <string name="commands_description">Type ?fix at the end of your text in any app:</string>
+    <string name="shortcut_fix_label">\?fix</string>
+    <string name="shortcut_fix_desc"> \u2014 Fix Text</string>
+    <string name="shortcut_fix_example_before">Before: i dont no how to spel\?fix</string>
+    <string name="shortcut_fix_example_after">After: I don\'t know how to spell.</string>
+    <string name="tips_multilingual">Works in any language \u2014 Swahili, French, Arabic, and more</string>
+    <string name="tips_structure">Sentence and paragraph structure is always preserved</string>
+    <string name="tips_speed">Wait 2\u20133 seconds for correction</string>
     <string name="tips_header">Tips</string>
-    <string name="tip_any_app">• Works in any app (WhatsApp, Notes, etc.)</string>
-    <string name="tip_free_tier">• Free tier available — visit aistudio.google.com</string>
-    <string name="tip_auto_replace">• Original text is replaced automatically</string>
 
     <string name="toast_api_key_saved">API Key saved securely</string>
     <string name="toast_invalid_api_key">Invalid API key format. Get your key from aistudio.google.com</string>

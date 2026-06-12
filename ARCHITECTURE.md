@@ -11,8 +11,8 @@
 | **MainActivity** | `MainActivity.kt` | Key entry UI, service status monitoring, and accessibility settings linking. |
 | **GrammarFixService** | `GrammarFixService.kt` | AccessibilityService lifecycle, shortcut detection, sensitive field filtering, and text replacement. |
 | **ApiKeyRepository** | `ApiKeyRepository.kt` | Secure storage of API keys using `EncryptedSharedPreferences`. Single source of truth. |
-| **AiClient** | `AiClient.kt` | Singleton object managing the `OkHttpClient` and Gemini API communication. |
-| **FixMode** | `AiClient.kt` | Enum defining `SENTENCE`, `PARAGRAPH`, and `ALL` correction modes. |
+| **AiClient** | `AiClient.kt` | Singleton managing OkHttpClient and Gemini API. Single fixGrammar(text, apiKey) endpoint. |
+| **FixMode enum** | `AiClient.kt` | Retired in v2 — replaced by unified multilingual prompt |
 | **Manifest** | `AndroidManifest.xml` | App permissions, service declarations, and network security references. |
 | **Config** | `accessibility_service_config.xml` | Declarative accessibility service properties (event types, flags). |
 | **Network Config** | `network_security_config.xml` | Policy for disabling cleartext traffic and defining trust anchors. |
@@ -44,6 +44,10 @@ graph TD
 - **AiClient Object Singleton**: Consolidates network logic into a single object. This ensures connection pooling via a single `OkHttpClient` instance, reducing overhead for multiple sequential requests.
 - **serviceScope + SupervisorJob**: The service manages its own coroutine lifecycle. Using a `SupervisorJob` ensures that a failure in one correction request doesn't crash the entire service, while the `serviceScope` ensures all pending work is cancelled when the service is destroyed.
 - **Fail-Safe Filtering**: Sensitive field filtering (passwords/PINs) is performed immediately upon receiving an accessibility event. This is a fail-safe approach that ensures data never leaves the node if the field is marked as sensitive.
+- **Unified Prompt (v2):** Three scope-specific prompts produced unreliable
+  results — ?fixs merged sentences, ?fixp fixed the wrong scope. A single
+  context-aware multilingual prompt delegates scope and language detection
+  to Gemini, which handles both more reliably than explicit scope instructions.
 
 ## Known Limitations
 
@@ -51,6 +55,8 @@ graph TD
 - **Text Replacement Reliability**: Replacement may fail in complex views (e.g., certain WebViews or custom-drawn text editors) that do not properly implement the accessibility `ACTION_SET_TEXT` protocol.
 - **Single Pending Job**: Only one correction can be in-flight at a time. If a user triggers a second shortcut before the first one completes, the first one is cancelled.
 - **inputType Edge Cases**: While standard password fields are filtered, custom keyboard implementations or non-standard apps may occasionally use `inputType` values that bypass current filters.
+- Single ?fix shortcut only — no user-selectable scope control.
+  Planned as a future feature if user feedback requests it.
 
 ## Resolved Issues
 
@@ -63,5 +69,6 @@ graph TD
 | **Security** | Switched to `EncryptedSharedPreferences`; disabled cleartext traffic; sanitized Logcat. |
 | **Performance** | Migrated `AiClient` to a singleton to reuse the HTTP client and connection pool. |
 | **Modernization** | Updated Gemini model and API endpoint to the latest stable versions. |
+| Prompt scope bugs | ?fixs merged sentences; ?fixp fixed wrong scope | Unified prompt + single ?fix shortcut | v2 |
 
 *Note: The detailed historical audit report (including individual severity ratings and recommendation tables) is preserved in the git history for reference.*
