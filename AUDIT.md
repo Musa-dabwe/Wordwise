@@ -47,7 +47,7 @@ Context7 source: /kotlin/kotlinx.coroutines
 | `GrammarFixService` | GrammarFixService.kt | Used — accessibility service |
 | `ApiKeyRepository` | ApiKeyRepository.kt | Used — key storage |
 | `AiClient` | AiClient.kt | Used — API client |
-| `FixMode` enum | AiClient.kt | Used — 3 entries all have call sites |
+| `FixMode` enum | AiClient.kt | Retired in v2 |
 | `safeRecycle()` extension | GrammarFixService.kt | Used — 6 call sites |
 | `shortcuts` map | GrammarFixService.kt | Used — checked in event handler |
 | `serviceScope` | GrammarFixService.kt | Used — launches coroutines |
@@ -119,8 +119,8 @@ Context7 source: /kotlin/kotlinx.coroutines
 
 1. **Was `getAllTextFromField()` fully removed?** Yes — no references found anywhere in the codebase.
 2. **Was `isProcessing` fully removed?** Yes — no references found anywhere in the codebase.
-3. **Any remaining references to OpenAI, `?fixg`, or `gemini-1.5-flash`?** No — none found. Current model: `gemini-2.5-flash-lite`. Shortcuts: `?fixs`, `?fixp`, `?fixo`.
-4. **Does `FixMode.ALL` have an active call site in `GrammarFixService.kt`?** Yes — in the `shortcuts` map (line 32: `"?fixo" to FixMode.ALL`), the `when` label (line 115), and passed to `AiClient.fixGrammar()` (line 134).
+3. **Any remaining references to OpenAI, `?fixg`, or `gemini-1.5-flash`?** No — none found. Current model: `gemini-2.5-flash-lite`. Shortcut: `?fix`.
+4. **Does `FixMode.ALL` have an active call site in `GrammarFixService.kt`?** No — retired in v2.
 5. **Are all four view IDs in `activity_main.xml` referenced in `MainActivity.kt`?** Yes — all 4 IDs (`apiKeyEditText`, `saveApiKeyButton`, `openAccessibilitySettingsButton`, `serviceStatusTextView`) are accessed via ViewBinding.
 
 ---

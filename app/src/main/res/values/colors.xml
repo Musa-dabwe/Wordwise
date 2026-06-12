@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Backgrounds -->
+    <color name="ww_bg_main">#121212</color>
     <color name="ww_bg_primary">#121212</color>
+    <color name="ww_bg_card">#1E1E1E</color>
     <color name="ww_bg_surface">#1E1E1E</color>
     <color name="ww_bg_inset">#252525</color>
 
@@ -15,8 +17,8 @@
     <color name="ww_text_hint">#616161</color>
 
     <!-- Status -->
-    <color name="ww_status_enabled">#4CAF50</color>
-    <color name="ww_status_disabled">#F44336</color>
+    <color name="ww_success">#4CAF50</color>
+    <color name="ww_error">#F44336</color>
 
     <!-- Input -->
     <color name="ww_input_bg">#2A2A2A</color>

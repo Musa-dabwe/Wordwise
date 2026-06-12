@@ -10,7 +10,6 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.network.AiClient
-import com.musa.wordwise.network.FixMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,12 +23,9 @@ class GrammarFixService : AccessibilityService() {
 
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
     
-    // Define shortcuts and their modes
-    private val shortcuts = mapOf(
-        "?fixs" to FixMode.SENTENCE,
-        "?fixp" to FixMode.PARAGRAPH,
-        "?fixo" to FixMode.ALL
-    )
+    private val shortcut = "?fix"
+    // Regex anchor $ ensures ?fixs, ?fixp, ?fixo do not trigger this
+    private val shortcutRegex = Regex("""\?fix$""")
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -39,7 +35,7 @@ class GrammarFixService : AccessibilityService() {
         super.onServiceConnected()
         if (apiKeyRepository.hasApiKey()) {
             Log.d("GrammarFix", "Service connected! API Key is present.")
-            showToast("WordWise is ready! Commands: ?fixs (sentence), ?fixp (paragraph), ?fixo (all)")
+            showToast("WordWise is ready! Type ?fix at the end of your text.")
         } else {
             Log.e("GrammarFix", "API Key is missing! Please set it in the app.")
             showToast("WordWise: Please add your API key in the app settings.")
@@ -87,13 +83,9 @@ class GrammarFixService : AccessibilityService() {
         }
 
         // Check which shortcut was used
-        val detectedShortcut = shortcuts.keys.find { currentText.endsWith(it) }
-        
-        if (detectedShortcut != null) {
-            val mode = shortcuts[detectedShortcut]!!
-            
-            // Unify text extraction for all modes
-            val textToFix = currentText.dropLast(detectedShortcut.length).trim()
+        if (shortcutRegex.containsMatchIn(currentText)) {
+            // Unify text extraction
+            val textToFix = currentText.dropLast(shortcut.length).trim()
             
             if (textToFix.isEmpty()) {
                 Log.d("GrammarFix", "No text to fix")
@@ -108,16 +100,10 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-            val modeLabel = when (mode) {
-                FixMode.SENTENCE -> "sentence"
-                FixMode.PARAGRAPH -> "paragraph"
-                FixMode.ALL -> "all text"
-            }
-
-            Log.d("GrammarFix", "Shortcut '$detectedShortcut' detected! Mode: $modeLabel")
-            Log.d("GrammarFix", "Text to fix: ${textToFix.length} chars, mode: $modeLabel")
+            Log.d("GrammarFix", "Shortcut '$shortcut' detected!")
+            Log.d("GrammarFix", "Text to fix: ${textToFix.length} chars")
             
-            showToast("Fixing $modeLabel...")
+            showToast("Fixing...")
 
             pendingJob?.cancel()
             pendingJob = serviceScope.launch {
@@ -129,14 +115,13 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    // Context7: withContext avoids redundant thread hops if already on the same dispatcher, making this outer wrapper unnecessary since AiClient.fixGrammar is already IO-bound.
-                    val correctedText = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey(), mode)
+                    val correctedText = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey())
                     
                     Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
                     
                     if (correctedText != textToFix) {
                         replaceText(source, correctedText)
-                        showToast("✓ Fixed $modeLabel!")
+                        showToast("✓ Fixed!")
                     } else {
                         showToast("Could not reach Gemini — shortcut removed, text unchanged.")
                     }

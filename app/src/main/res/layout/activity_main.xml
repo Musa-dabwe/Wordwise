@@ -3,57 +3,41 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/ww_bg_primary"
-    android:fillViewport="true"
-    android:clipToPadding="false"
-    android:fitsSystemWindows="false">
+    android:background="@color/ww_bg_main">
 
     <LinearLayout
+        android:id="@+id/headerLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="24dp">
+        android:padding="20dp">
 
         <!-- Header -->
-        <LinearLayout
-            android:id="@+id/headerLayout"
-            android:layout_width="match_parent"
+        <TextView
+            android:id="@+id/app_title"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginBottom="24dp"
-            android:gravity="center"
-            android:paddingTop="48dp"
-            android:paddingBottom="24dp">
+            android:text="@string/app_name"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="@color/ww_text_primary" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_name"
-                android:textSize="32sp"
-                android:textStyle="bold"
-                android:textColor="@color/ww_text_primary"
-                android:gravity="center" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_subtitle"
+            android:textSize="14sp"
+            android:textColor="@color/ww_text_secondary"
+            android:layout_marginBottom="24dp" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_subtitle"
-                android:textSize="14sp"
-                android:textColor="@color/ww_text_secondary"
-                android:gravity="center"
-                android:layout_marginTop="4dp" />
-        </LinearLayout>
-
-        <!-- Card 1: API Key -->
+        <!-- 1. API Key Section -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/ww_bg_surface"
+            app:cardBackgroundColor="@color/ww_bg_card"
             app:cardCornerRadius="12dp"
-            app:cardElevation="0dp"
-            android:layout_marginBottom="12dp">
+            app:cardElevation="2dp"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -67,67 +51,63 @@
                     android:text="@string/section_api_key"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/ww_accent" />
+                    android:textColor="@color/ww_text_primary" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/section_api_key_helper"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textColor="@color/ww_text_secondary"
-                    android:layout_marginTop="4dp" />
+                    android:layout_marginBottom="12dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/apiKeyInputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    app:boxBackgroundColor="@color/ww_input_bg"
-                    app:boxStrokeColor="@color/ww_input_stroke"
-                    app:boxStrokeWidth="1dp"
-                    app:boxStrokeWidthFocused="1dp"
-                    app:hintEnabled="false"
-                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.WordWise.Input"
-                    app:endIconMode="password_toggle"
-                    app:endIconTint="@color/ww_accent"
-                    app:passwordToggleContentDescription="@string/toggle_key_visibility"
-                    app:helperTextEnabled="true"
-                    app:helperText=""
-                    app:helperTextTextColor="@color/ww_status_enabled">
+                    android:hint="@string/api_key_hint"
+                    app:passwordToggleEnabled="true"
+                    app:boxStrokeColor="@color/ww_accent"
+                    app:hintTextColor="@color/ww_accent"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/apiKeyEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/api_key_hint"
                         android:inputType="textPassword"
-                        android:textColorHint="@color/ww_text_hint"
-                        android:textColor="@color/ww_text_primary"
-                        android:padding="12dp"
-                        android:background="@android:color/transparent" />
+                        android:textColor="@color/ww_text_primary" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/keyStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/key_saved_indicator"
+                    android:textSize="12sp"
+                    android:textColor="@color/ww_success"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
 
                 <Button
                     android:id="@+id/saveApiKeyButton"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="wrap_content"
                     android:text="@string/save_api_key"
                     android:layout_marginTop="12dp"
-                    app:cornerRadius="10dp"
-                    android:backgroundTint="@color/ww_accent_button"
-                    android:textColor="@color/ww_text_primary"
-                    android:textSize="15sp" />
+                    android:backgroundTint="@color/ww_accent"
+                    android:textColor="@android:color/white" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Card 2: Accessibility Service -->
+        <!-- 2. Accessibility Section -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/ww_bg_surface"
+            app:cardBackgroundColor="@color/ww_bg_card"
             app:cardCornerRadius="12dp"
-            app:cardElevation="0dp"
-            android:layout_marginBottom="12dp">
+            app:cardElevation="2dp"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -141,47 +121,44 @@
                     android:text="@string/section_accessibility"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/ww_accent" />
+                    android:textColor="@color/ww_text_primary" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/section_accessibility_helper"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textColor="@color/ww_text_secondary"
-                    android:layout_marginTop="4dp" />
-
-                <Button
-                    android:id="@+id/openAccessibilitySettingsButton"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:text="@string/open_accessibility_settings"
-                    android:layout_marginTop="12dp"
-                    app:cornerRadius="10dp"
-                    app:strokeColor="@color/ww_accent"
-                    android:textColor="@color/ww_accent"
-                    android:backgroundTint="@android:color/transparent" />
+                    android:layout_marginBottom="12dp" />
 
                 <TextView
                     android:id="@+id/serviceStatusTextView"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/status_disabled"
-                    android:textSize="13sp"
-                    android:textColor="@color/ww_status_disabled"
-                    android:gravity="center"
-                    android:layout_marginTop="8dp" />
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/ww_error"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/openAccessibilitySettingsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/open_accessibility_settings"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:textColor="@color/ww_accent"
+                    app:strokeColor="@color/ww_accent" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Card 3: Commands -->
+        <!-- 3. Commands Section -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/ww_bg_surface"
+            app:cardBackgroundColor="@color/ww_bg_card"
             app:cardCornerRadius="12dp"
-            app:cardElevation="0dp">
+            app:cardElevation="2dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -195,7 +172,7 @@
                     android:text="@string/section_commands"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/ww_accent" />
+                    android:textColor="@color/ww_text_primary" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -205,7 +182,6 @@
                     android:textColor="@color/ww_text_secondary"
                     android:layout_marginTop="4dp" />
 
-                <!-- Inset card: ?fixs -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -228,7 +204,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixs_label"
+                                android:text="@string/shortcut_fix_label"
                                 android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:fontFamily="monospace"
@@ -237,16 +213,17 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixs_desc"
+                                android:text="@string/shortcut_fix_desc"
                                 android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:textColor="@color/ww_text_primary" />
+
                         </LinearLayout>
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/cmd_fixs_before"
+                            android:text="@string/shortcut_fix_example_before"
                             android:textSize="12sp"
                             android:textColor="@color/ww_text_hint"
                             android:layout_marginTop="4dp" />
@@ -254,106 +231,12 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/cmd_fixs_after"
+                            android:text="@string/shortcut_fix_example_after"
                             android:textSize="12sp"
                             android:textColor="@color/ww_text_secondary" />
+
                     </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
 
-                <!-- Inset card: ?fixp -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:cardBackgroundColor="@color/ww_bg_inset"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixp_label"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:fontFamily="monospace"
-                                android:textColor="@color/ww_accent" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixp_desc"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/ww_text_primary" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/cmd_fixp_helper"
-                            android:textSize="12sp"
-                            android:textColor="@color/ww_text_secondary"
-                            android:layout_marginTop="4dp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Inset card: ?fixo -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:cardBackgroundColor="@color/ww_bg_inset"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixo_label"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:fontFamily="monospace"
-                                android:textColor="@color/ww_accent" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/cmd_fixo_desc"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/ww_text_primary" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/cmd_fixo_helper"
-                            android:textSize="12sp"
-                            android:textColor="@color/ww_text_secondary"
-                            android:layout_marginTop="4dp" />
-                    </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- Tips Block -->
@@ -374,7 +257,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/tip_any_app"
+                        android:text="@string/tips_multilingual"
                         android:textSize="12sp"
                         android:textColor="@color/ww_text_secondary"
                         android:layout_marginTop="4dp" />
@@ -382,7 +265,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/tip_free_tier"
+                        android:text="@string/tips_structure"
                         android:textSize="12sp"
                         android:textColor="@color/ww_text_secondary"
                         android:layout_marginTop="2dp" />
@@ -390,7 +273,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/tip_auto_replace"
+                        android:text="@string/tips_speed"
                         android:textSize="12sp"
                         android:textColor="@color/ww_text_secondary"
                         android:layout_marginTop="2dp" />

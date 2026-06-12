@@ -79,12 +79,12 @@ class MainActivity : AppCompatActivity() {
         if (isAccessibilityServiceEnabled(this, GrammarFixService::class.java)) {
             binding.serviceStatusTextView.text = getString(R.string.status_enabled)
             binding.serviceStatusTextView.setTextColor(
-                ContextCompat.getColor(this, R.color.ww_status_enabled)
+                ContextCompat.getColor(this, R.color.ww_success)
             )
         } else {
             binding.serviceStatusTextView.text = getString(R.string.status_disabled)
             binding.serviceStatusTextView.setTextColor(
-                ContextCompat.getColor(this, R.color.ww_status_disabled)
+                ContextCompat.getColor(this, R.color.ww_error)
             )
         }
     }

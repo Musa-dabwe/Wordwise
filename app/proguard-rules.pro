@@ -9,7 +9,7 @@
 -keep class com.musa.wordwise.GrammarFixService { *; }
 
 # Keep FixMode enum — used by name in AiClient.kt
--keep enum com.musa.wordwise.network.FixMode { *; }
+# -keep enum com.musa.wordwise.network.FixMode { *; } (Retired in v2)
 
 # kotlinx.serialization
 -keepattributes *Annotation*, InnerClasses
