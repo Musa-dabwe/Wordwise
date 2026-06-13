@@ -23,4 +23,6 @@
     <!-- Input -->
     <color name="ww_input_bg">#2A2A2A</color>
     <color name="ww_input_stroke">#3A3A3A</color>
+
+    <color name="ww_divider">#2A2A2A</color>
 </resources>
