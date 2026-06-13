@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,48 +10,40 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="24dp">
+        android:padding="20dp">
 
-        <!-- Header — inset padding applied here by MainActivity -->
         <LinearLayout
             android:id="@+id/headerLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginBottom="24dp"
-            android:gravity="center"
-            android:paddingBottom="24dp">
+            android:layout_marginBottom="24dp">
 
             <TextView
-                android:id="@+id/app_title"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/app_name"
-                android:textSize="32sp"
+                android:textSize="28sp"
                 android:textStyle="bold"
-                android:gravity="center"
                 android:textColor="@color/ww_text_primary" />
 
             <TextView
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/app_subtitle"
                 android:textSize="14sp"
-                android:gravity="center"
-                android:textColor="@color/ww_text_secondary"
-                android:layout_marginTop="4dp" />
+                android:textColor="@color/ww_accent"
+                android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <!-- 1. API Key Section -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             app:cardBackgroundColor="@color/ww_bg_card"
             app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
+            app:cardElevation="2dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -72,45 +63,50 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/section_api_key_helper"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textColor="@color/ww_text_secondary"
-                    android:layout_marginBottom="12dp" />
+                    android:layout_marginTop="4dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/apiKeyInputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
                     android:hint="@string/api_key_hint"
+                    app:hintTextColor="@color/ww_text_hint"
                     app:boxStrokeColor="@color/ww_accent"
-                    app:hintTextColor="@color/ww_accent"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/ww_text_secondary"
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/apiKeyEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:textColor="@color/ww_text_primary"
                         android:inputType="textPassword"
-                        android:textColor="@color/ww_text_primary" />
+                        android:maxLines="1" />
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <TextView
-                    android:id="@+id/keyStatusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/key_saved_indicator"
-                    android:textSize="12sp"
-                    android:textColor="@color/ww_success"
-                    android:layout_marginTop="8dp"
-                    android:visibility="gone" />
 
                 <Button
                     android:id="@+id/saveApiKeyButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/save_api_key"
                     android:layout_marginTop="12dp"
-                    android:backgroundTint="@color/ww_accent"
-                    android:textColor="@android:color/white" />
+                    android:text="@string/save_api_key"
+                    android:backgroundTint="@color/ww_accent_button"
+                    android:textColor="@color/ww_text_primary"
+                    android:textAllCaps="false" />
+
+                <TextView
+                    android:id="@+id/keyStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ww_success"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -118,10 +114,10 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             app:cardBackgroundColor="@color/ww_bg_card"
             app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
+            app:cardElevation="2dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -141,14 +137,15 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/section_accessibility_helper"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textColor="@color/ww_text_secondary"
-                    android:layout_marginBottom="12dp" />
+                    android:layout_marginTop="4dp" />
 
                 <TextView
                     android:id="@+id/serviceStatusTextView"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
                     android:text="@string/status_disabled"
                     android:textSize="14sp"
                     android:textStyle="bold"
@@ -292,6 +289,40 @@
                         android:textColor="@color/ww_text_secondary"
                         android:layout_marginTop="2dp" />
                 </LinearLayout>
+
+                <!-- Info: best use and quota note -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@color/ww_divider" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/info_best_suited_title"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/ww_text_secondary"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.08" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/info_best_suited_body"
+                    android:textSize="12sp"
+                    android:textColor="@color/ww_text_secondary"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/info_quota_note"
+                    android:textSize="11sp"
+                    android:textColor="@color/ww_text_hint"
+                    android:layout_marginTop="6dp" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

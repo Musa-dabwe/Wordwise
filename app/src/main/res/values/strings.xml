@@ -31,4 +31,20 @@
     <string name="toggle_key_visibility">Toggle API key visibility</string>
     <string name="key_saved_indicator">✓ Key saved and encrypted on device</string>
     <string name="key_empty_error">Please enter a valid API key</string>
+
+    <!-- Rate limit and error messages -->
+    <string name="error_rate_limited">API quota reached. WordWise works best for short texts under 500 characters.\n\nCheck your usage at aistudio.google.com</string>
+    <string name="error_rate_limited_with_retry">API quota reached \u2014 try again in %1$d seconds.\n\nFor frequent use, check your quota at aistudio.google.com</string>
+    <string name="error_auth">API key rejected (error %1$d). Please check your key in WordWise settings.</string>
+    <string name="error_network">Could not reach Gemini (%1$s). Shortcut removed, text unchanged.</string>
+    <string name="error_unchanged">No corrections needed \u2014 text looks good.</string>
+
+    <!-- Large text pre-flight warning -->
+    <string name="warning_large_text">Large text detected \u2014 this may use significant API quota. Fixing anyway...</string>
+
+    <!-- Info card in Commands section -->
+    <string name="info_best_suited_title">Best suited for</string>
+    <string name="info_best_suited_body">Short messages, sentences, and paragraphs. For long documents, break text into sections and fix each one separately.</string>
+    <string name="info_quota_note">Free tier: ~1,500 requests/day. Check usage at aistudio.google.com</string>
+    <string name="toast_fixed">✓ Fixed!</string>
 </resources>

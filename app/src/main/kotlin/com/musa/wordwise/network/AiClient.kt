@@ -2,7 +2,6 @@ package com.musa.wordwise.network
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,26 +10,28 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-object AiClient {
-    private const val MAX_RETRIES = 3
-    private const val INITIAL_DELAY_MS = 1000L
+sealed class GrammarResult {
+    data class Success(val correctedText: String) : GrammarResult()
+    data class RateLimited(val retryAfterSeconds: Int?) : GrammarResult()
+    data class AuthError(val code: Int) : GrammarResult()
+    data class NetworkError(val message: String?) : GrammarResult()
+    data class Unchanged(val reason: String) : GrammarResult()
+}
 
+object AiClient {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun fixGrammar(text: String, apiKey: String): String =
+    suspend fun fixGrammar(text: String, apiKey: String): GrammarResult =
         withContext(Dispatchers.IO) {
             if (apiKey.isEmpty()) {
-                Log.e("GrammarFix", "API Key is empty!")
-                return@withContext text
+                return@withContext GrammarResult.Unchanged("API key is empty")
             }
 
             // UNIFIED GRAMMAR CORRECTION PROMPT — WordWise v2
-            // Temperature: 0.1 — deterministic correction with minimal entropy
-            // for ambiguous cases (British/American spelling, context-dependent homonyms)
             val prompt = """
                 Correct grammar, spelling, and punctuation in the text below.
 
@@ -66,7 +67,6 @@ object AiClient {
                 Text: $text
             """.trimIndent()
 
-            // Build JSON for Gemini API
             val jsonBody = buildJsonObject {
                 putJsonArray("contents") {
                     addJsonObject {
@@ -88,60 +88,46 @@ object AiClient {
             Log.d("GrammarFix", "Sending request to Gemini...")
             Log.d("GrammarFix", "Input length: ${text.length} chars")
 
-            var lastError: Exception? = null
-            repeat(MAX_RETRIES) { attempt ->
-                try {
-                    val result = executeRequest(requestBody, apiKey, text)
-                    if (result != null) return@withContext result
-                } catch (e: Exception) {
-                    lastError = e
-                    if (attempt < MAX_RETRIES - 1) {
-                        val delayMs = INITIAL_DELAY_MS * (attempt + 1)
-                        Log.w("GrammarFix",
-                            "Attempt ${attempt + 1} failed, retrying in ${delayMs}ms")
-                        delay(delayMs)
+            try {
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+                    "gemini-2.5-flash-lite:generateContent?key=$apiKey"
+
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody)
+                    .build()
+
+                httpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string()
+                    Log.d("GrammarFix", "Response code: ${response.code}")
+
+                    when {
+                        response.code == 429 -> {
+                            val retryAfter = response.header("Retry-After")?.toIntOrNull()
+                            GrammarResult.RateLimited(retryAfter)
+                        }
+                        response.code == 401 || response.code == 403 -> {
+                            GrammarResult.AuthError(response.code)
+                        }
+                        !response.isSuccessful -> {
+                            GrammarResult.NetworkError("${response.code} ${response.message}")
+                        }
+                        responseBody == null -> {
+                            GrammarResult.NetworkError("Empty response body")
+                        }
+                        else -> {
+                            parseResponse(responseBody, text)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("GrammarFix", "Network error: ${e.message}", e)
+                GrammarResult.NetworkError(e.message)
             }
-
-            Log.e("GrammarFix", "All $MAX_RETRIES attempts failed: ${lastError?.message}")
-            return@withContext text
         }
 
-    private fun executeRequest(
-        requestBody: okhttp3.RequestBody,
-        apiKey: String,
-        originalText: String
-    ): String? {
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-            "gemini-2.5-flash-lite:generateContent?key=$apiKey"
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        val response = httpClient.newCall(request).execute()
-        val responseBody = response.body?.string()
-
-        Log.d("GrammarFix", "Response code: ${response.code}")
-
-        // Retry on 429 (rate limit) and 5xx (server errors)
-        if (response.code == 429 || response.code >= 500) {
-            Log.w("GrammarFix", "Retryable error: ${response.code}")
-            return null // signals retry
-        }
-
-        if (response.isSuccessful && responseBody != null) {
-            return parseResponse(responseBody, originalText)
-        } else {
-            Log.e("GrammarFix", "API Error: ${response.code} ${response.message}")
-            return originalText // non-retryable error, return original
-        }
-    }
-
-    private fun parseResponse(responseBody: String, originalText: String): String {
+    private fun parseResponse(responseBody: String, originalText: String): GrammarResult {
         return try {
             val jsonObject = Json.parseToJsonElement(responseBody).jsonObject
             val correctedText = jsonObject["candidates"]
@@ -154,16 +140,17 @@ object AiClient {
                 ?.trim()
 
             if (!correctedText.isNullOrEmpty()) {
-                Log.d("GrammarFix", "Success!")
-                Log.d("GrammarFix", "Output length: ${correctedText.length} chars")
-                correctedText
+                if (correctedText == originalText) {
+                    GrammarResult.Unchanged("No corrections needed")
+                } else {
+                    GrammarResult.Success(correctedText)
+                }
             } else {
-                Log.e("GrammarFix", "Corrected text is empty")
-                originalText
+                GrammarResult.NetworkError("JSON parsing failed: empty result")
             }
         } catch (e: Exception) {
             Log.e("GrammarFix", "JSON parsing failed: ${e.message}", e)
-            originalText
+            GrammarResult.NetworkError("JSON parsing failed")
         }
     }
 }

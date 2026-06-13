@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.network.AiClient
+import com.musa.wordwise.network.GrammarResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,8 +25,8 @@ class GrammarFixService : AccessibilityService() {
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
     
     private val shortcut = "?fix"
-    // Regex anchor $ ensures ?fixs, ?fixp, ?fixo do not trigger this
     private val shortcutRegex = Regex("""\?fix$""")
+    private val LARGE_TEXT_THRESHOLD = 1000 // characters
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -47,7 +48,6 @@ class GrammarFixService : AccessibilityService() {
 
         val source = event.source ?: return
 
-        // TODO: verify inputType filtering on device
         val inputType = source.inputType
         val typeClass = inputType and android.text.InputType.TYPE_MASK_CLASS
         val typeVariation = inputType and android.text.InputType.TYPE_MASK_VARIATION
@@ -65,7 +65,6 @@ class GrammarFixService : AccessibilityService() {
             return
         }
 
-        // Try multiple extraction sources: node text, node content description, then event text
         val sourceText = source.text?.toString()
         val sourceDescription = source.contentDescription?.toString()
         val eventText = event.text.joinToString("")
@@ -82,9 +81,7 @@ class GrammarFixService : AccessibilityService() {
             return
         }
 
-        // Check which shortcut was used
         if (shortcutRegex.containsMatchIn(currentText)) {
-            // Unify text extraction
             val textToFix = currentText.dropLast(shortcut.length).trim()
             
             if (textToFix.isEmpty()) {
@@ -95,7 +92,7 @@ class GrammarFixService : AccessibilityService() {
             }
 
             if (!apiKeyRepository.hasApiKey()) {
-                showToast("Please set your API key in WordWise app")
+                showToast(getString(R.string.toast_api_key_empty), long = true)
                 source.safeRecycle()
                 return
             }
@@ -108,32 +105,54 @@ class GrammarFixService : AccessibilityService() {
             pendingJob?.cancel()
             pendingJob = serviceScope.launch {
                 try {
-                    // Strip shortcut immediately before API call
+                    if (textToFix.length > LARGE_TEXT_THRESHOLD) {
+                        showToast(getString(R.string.warning_large_text))
+                    }
+
                     val stripped = replaceText(source, textToFix)
                     if (!stripped) {
-                        // replaceText already showed toast and logged warning
                         return@launch
                     }
 
-                    val correctedText = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey())
-                    
-                    Log.d("GrammarFix", "Corrected text received: ${correctedText.length} chars")
-                    
-                    if (correctedText != textToFix) {
-                        replaceText(source, correctedText)
-                        showToast("✓ Fixed!")
-                    } else {
-                        showToast("Could not reach Gemini — shortcut removed, text unchanged.")
+                    when (val result = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey())) {
+                        is GrammarResult.Success -> {
+                            if (result.correctedText != textToFix) {
+                                replaceText(source, result.correctedText)
+                                showToast(getString(R.string.toast_fixed))
+                            } else {
+                                showToast(getString(R.string.error_unchanged), long = true)
+                            }
+                        }
+                        is GrammarResult.RateLimited -> {
+                            val message = if (result.retryAfterSeconds != null) {
+                                getString(R.string.error_rate_limited_with_retry, result.retryAfterSeconds)
+                            } else {
+                                getString(R.string.error_rate_limited)
+                            }
+                            showToast(message, long = true)
+                        }
+                        is GrammarResult.AuthError -> {
+                            showToast(getString(R.string.error_auth, result.code), long = true)
+                        }
+                        is GrammarResult.NetworkError -> {
+                            showToast(getString(R.string.error_network, result.message ?: "unknown error"), long = true)
+                        }
+                        is GrammarResult.Unchanged -> {
+                            if (result.reason == "API key is empty") {
+                                showToast(getString(R.string.toast_api_key_empty), long = true)
+                            } else {
+                                showToast(getString(R.string.error_unchanged), long = true)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("GrammarFix", "Error fixing grammar: ${e.message}", e)
-                    showToast("Error: ${e.message}")
+                    showToast("Error: ${e.message}", long = true)
                 } finally {
                     source.safeRecycle()
                 }
             }
         } else {
-            // Not our shortcut, but we must recycle the node
             source.safeRecycle()
         }
     }
@@ -168,9 +187,13 @@ class GrammarFixService : AccessibilityService() {
         serviceScope.cancel()
     }
 
-    private fun showToast(message: String) {
+    private fun showToast(message: String, long: Boolean = false) {
         mainHandler.post {
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                message,
+                if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
