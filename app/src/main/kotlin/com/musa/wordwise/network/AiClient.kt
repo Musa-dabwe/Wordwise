@@ -10,6 +10,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
+enum class AiProvider {
+    GEMINI,
+    OLLAMA_CLOUD
+}
+
 sealed class GrammarResult {
     data class Success(val correctedText: String) : GrammarResult()
     data class RateLimited(val retryAfterSeconds: Int?) : GrammarResult()
@@ -25,109 +30,178 @@ object AiClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun fixGrammar(text: String, apiKey: String): GrammarResult =
-        withContext(Dispatchers.IO) {
-            if (apiKey.isEmpty()) {
-                return@withContext GrammarResult.Unchanged("API key is empty")
-            }
+    private const val SYSTEM_PROMPT = """
+        Correct grammar, spelling, and punctuation in the text below.
 
-            // UNIFIED GRAMMAR CORRECTION PROMPT — WordWise v2
-            val prompt = """
-                Correct grammar, spelling, and punctuation in the text below.
+        RULES:
 
-                RULES:
+        1. LANGUAGE — Automatically detect the input language and correct within
+        that language. NEVER translate. If the input mixes multiple languages,
+        preserve the mix and correct each segment in its own language.
+        Supported languages include: Swahili, Chinyanja, Nyanja, Bemba, Tonga, Lozi, Kaonde, Luvale, Zulu, Xhosa, Shona, Ndebele, Sotho, Tswana, Venda, Tsonga, Afrikaans, Amharic, Hausa, Yoruba, Igbo, Twi, Wolof, Somali, Tigrinya, Oromo, Kinyarwanda, Kirundi, Luganda, Lingala, Kikuyu, Dholuo, Fula, Bambara, Ewe, Akan, Ga, Igala, Kanuri, Malagasy, Sango, Chichewa, English, French, Spanish, Portuguese, German, Italian, Dutch, Russian, Polish, Ukrainian, Romanian, Czech, Slovak, Hungarian, Greek, Swedish, Norwegian, Danish, Finnish, Croatian, Serbian, Bulgarian, Catalan, Turkish, Albanian, Macedonian, Slovenian, Estonian, Latvian, Lithuanian, Welsh, Irish, Basque, Maltese, Icelandic, Luxembourgish, Belarusian, Georgian, Armenian, Azerbaijani, Mandarin Chinese, Cantonese, Japanese, Korean, Hindi, Bengali, Urdu, Tamil, Telugu, Marathi, Gujarati, Punjabi, Kannada, Malayalam, Odia, Assamese, Nepali, Sinhala, Thai, Vietnamese, Indonesian, Malay, Tagalog, Burmese, Khmer, Lao, Javanese, Sundanese, Cebuano, Mongolian, Tibetan, Uyghur, Kazakh, Uzbek, Kyrgyz, Tajik, Turkmen, Pashto, Dari, Farsi, Kurdish, Hebrew, Arabic, Aramaic, Haitian Creole, Jamaican Patois, Quechua, Guaraní, Nahuatl, Māori, Hawaiian, Samoan, Tongan, Fijian, Tok Pisin.
 
-                1. LANGUAGE — Automatically detect the input language and correct within
-                that language. NEVER translate. If the input mixes multiple languages,
-                preserve the mix and correct each segment in its own language.
-                Supported languages include: Swahili, Chinyanja, Nyanja, Bemba, Tonga, Lozi, Kaonde, Luvale, Zulu, Xhosa, Shona, Ndebele, Sotho, Tswana, Venda, Tsonga, Afrikaans, Amharic, Hausa, Yoruba, Igbo, Twi, Wolof, Somali, Tigrinya, Oromo, Kinyarwanda, Kirundi, Luganda, Lingala, Kikuyu, Dholuo, Fula, Bambara, Ewe, Akan, Ga, Igala, Kanuri, Malagasy, Sango, Chichewa, English, French, Spanish, Portuguese, German, Italian, Dutch, Russian, Polish, Ukrainian, Romanian, Czech, Slovak, Hungarian, Greek, Swedish, Norwegian, Danish, Finnish, Croatian, Serbian, Bulgarian, Catalan, Turkish, Albanian, Macedonian, Slovenian, Estonian, Latvian, Lithuanian, Welsh, Irish, Basque, Maltese, Icelandic, Luxembourgish, Belarusian, Georgian, Armenian, Azerbaijani, Mandarin Chinese, Cantonese, Japanese, Korean, Hindi, Bengali, Urdu, Tamil, Telugu, Marathi, Gujarati, Punjabi, Kannada, Malayalam, Odia, Assamese, Nepali, Sinhala, Thai, Vietnamese, Indonesian, Malay, Tagalog, Burmese, Khmer, Lao, Javanese, Sundanese, Cebuano, Mongolian, Tibetan, Uyghur, Kazakh, Uzbek, Kyrgyz, Tajik, Turkmen, Pashto, Dari, Farsi, Kurdish, Hebrew, Arabic, Aramaic, Haitian Creole, Jamaican Patois, Quechua, Guaraní, Nahuatl, Māori, Hawaiian, Samoan, Tongan, Fijian, Tok Pisin.
+        2. STRUCTURE — Preserve ALL line breaks, paragraph separations, and
+        sentence boundaries exactly as written. NEVER merge two sentences into
+        one. NEVER split one sentence into two. NEVER reorder content.
 
-                2. STRUCTURE — Preserve ALL line breaks, paragraph separations, and
-                sentence boundaries exactly as written. NEVER merge two sentences into
-                one. NEVER split one sentence into two. NEVER reorder content.
+        3. TONE — Preserve the original tone, style, and meaning. Do not rephrase
+        for style. Do not add words not implied. Do not remove words unless they
+        are clearly duplicates or errors.
 
-                3. TONE — Preserve the original tone, style, and meaning. Do not rephrase
-                for style. Do not add words not implied. Do not remove words unless they
-                are clearly duplicates or errors.
+        4. OUTPUT — Output ONLY the corrected text. No explanations, no
+        commentary, no labels, no quotation marks. If the text is already
+        correct, return it exactly as received.
 
-                4. OUTPUT — Output ONLY the corrected text. No explanations, no
-                commentary, no labels, no quotation marks. If the text is already
-                correct, return it exactly as received.
+        5. CAPITALISATION — Always capitalise the first letter of the
+        corrected output, regardless of how the input started. Every
+        sentence in the output must start with a capital letter.
 
-                5. CAPITALISATION — Always capitalise the first letter of the
-                corrected output, regardless of how the input started. Every
-                sentence in the output must start with a capital letter.
+        6. SHORT TEXT — If the input is one or two words, correct obvious spelling
+        errors only. Do not add punctuation that was not there.
 
-                6. SHORT TEXT — If the input is one or two words, correct obvious spelling
-                errors only. Do not add punctuation that was not there.
+        7. CODE-SWITCHING — If the input mixes two or more languages, treat each
+        segment in its own language context. Do not normalize to a single language.
+    """
 
-                7. CODE-SWITCHING — If the input mixes two or more languages, treat each
-                segment in its own language context. Do not normalize to a single language.
+    suspend fun fixGrammar(
+        text: String,
+        apiKey: String,
+        provider: AiProvider = AiProvider.GEMINI,
+        ollamaKey: String? = null
+    ): GrammarResult = withContext(Dispatchers.IO) {
+        if (provider == AiProvider.OLLAMA_CLOUD && !ollamaKey.isNullOrBlank()) {
+            fixGrammarOllama(text, ollamaKey)
+        } else {
+            fixGrammarGemini(text, apiKey)
+        }
+    }
 
-                Text: $text
-            """.trimIndent()
+    private suspend fun fixGrammarGemini(text: String, apiKey: String): GrammarResult {
+        if (apiKey.isEmpty()) {
+            return GrammarResult.Unchanged("API key is empty")
+        }
 
-            val jsonBody = buildJsonObject {
-                putJsonArray("contents") {
-                    addJsonObject {
-                        putJsonArray("parts") {
-                            addJsonObject {
-                                put("text", prompt)
-                            }
+        val prompt = "$SYSTEM_PROMPT\n\nText: $text"
+
+        val jsonBody = buildJsonObject {
+            putJsonArray("contents") {
+                addJsonObject {
+                    putJsonArray("parts") {
+                        addJsonObject {
+                            put("text", prompt)
                         }
                     }
                 }
-                putJsonObject("generationConfig") {
-                    put("temperature", 0.1)
-                    put("maxOutputTokens", 4000)
-                }
             }
-
-            val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
-
-            Log.d("GrammarFix", "Sending request to Gemini...")
-            Log.d("GrammarFix", "Input length: ${text.length} chars")
-
-            try {
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-                    "gemini-2.5-flash-lite:generateContent?key=$apiKey"
-
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("Content-Type", "application/json")
-                    .post(requestBody)
-                    .build()
-
-                httpClient.newCall(request).execute().use { response ->
-                    val responseBody = response.body?.string()
-                    Log.d("GrammarFix", "Response code: ${response.code}")
-
-                    when {
-                        response.code == 429 -> {
-                            val retryAfter = response.header("Retry-After")?.toIntOrNull()
-                            GrammarResult.RateLimited(retryAfter)
-                        }
-                        response.code == 401 || response.code == 403 -> {
-                            GrammarResult.AuthError(response.code)
-                        }
-                        !response.isSuccessful -> {
-                            GrammarResult.NetworkError("${response.code} ${response.message}")
-                        }
-                        responseBody == null -> {
-                            GrammarResult.NetworkError("Empty response body")
-                        }
-                        else -> {
-                            parseResponse(responseBody, text)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("GrammarFix", "Network error: ${e.message}", e)
-                GrammarResult.NetworkError(e.message)
+            putJsonObject("generationConfig") {
+                put("temperature", 0.1)
+                put("maxOutputTokens", 4000)
             }
         }
 
-    private fun parseResponse(responseBody: String, originalText: String): GrammarResult {
+        val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+
+        Log.d("GrammarFix", "Sending request to Gemini...")
+        Log.d("GrammarFix", "Input length: ${text.length} chars")
+
+        return try {
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+                "gemini-2.5-flash-lite:generateContent?key=$apiKey"
+
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string()
+                Log.d("GrammarFix", "Response code: ${response.code}")
+
+                when {
+                    response.code == 429 -> {
+                        val retryAfter = response.header("Retry-After")?.toIntOrNull()
+                        GrammarResult.RateLimited(retryAfter)
+                    }
+                    response.code == 401 || response.code == 403 -> {
+                        GrammarResult.AuthError(response.code)
+                    }
+                    !response.isSuccessful -> {
+                        GrammarResult.NetworkError("${response.code} ${response.message}")
+                    }
+                    responseBody == null -> {
+                        GrammarResult.NetworkError("Empty response body")
+                    }
+                    else -> {
+                        parseGeminiResponse(responseBody, text)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GrammarFix", "Network error: ${e.message}", e)
+            GrammarResult.NetworkError(e.message)
+        }
+    }
+
+    private suspend fun fixGrammarOllama(text: String, apiKey: String): GrammarResult {
+        val jsonBody = buildJsonObject {
+            put("model", "nemotron-3-nano:cloud")
+            putJsonArray("messages") {
+                addJsonObject {
+                    put("role", "system")
+                    put("content", SYSTEM_PROMPT.trimIndent())
+                }
+                addJsonObject {
+                    put("role", "user")
+                    put("content", text)
+                }
+            }
+            put("stream", false)
+        }
+
+        val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+
+        Log.d("GrammarFix", "Sending request to Ollama Cloud...")
+        Log.d("GrammarFix", "Input length: ${text.length} chars")
+
+        return try {
+            val request = Request.Builder()
+                .url("https://ollama.com/api/chat")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string()
+                Log.d("GrammarFix", "Ollama Response code: ${response.code}")
+
+                when {
+                    response.code == 429 -> {
+                        val retryAfter = response.header("Retry-After")?.toIntOrNull()
+                        GrammarResult.RateLimited(retryAfter)
+                    }
+                    response.code == 401 || response.code == 403 -> {
+                        GrammarResult.AuthError(response.code)
+                    }
+                    !response.isSuccessful -> {
+                        GrammarResult.NetworkError("${response.code} ${response.message}")
+                    }
+                    responseBody == null -> {
+                        GrammarResult.NetworkError("Empty response body")
+                    }
+                    else -> {
+                        parseOllamaResponse(responseBody, text)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GrammarFix", "Ollama network error: ${e.message}", e)
+            GrammarResult.NetworkError(e.message)
+        }
+    }
+
+    private fun parseGeminiResponse(responseBody: String, originalText: String): GrammarResult {
         return try {
             val jsonObject = Json.parseToJsonElement(responseBody).jsonObject
             val correctedText = jsonObject["candidates"]
@@ -139,18 +213,37 @@ object AiClient {
                 ?.jsonPrimitive?.content
                 ?.trim()
 
-            if (!correctedText.isNullOrEmpty()) {
-                if (correctedText == originalText) {
-                    GrammarResult.Unchanged("No corrections needed")
-                } else {
-                    GrammarResult.Success(correctedText)
-                }
-            } else {
-                GrammarResult.NetworkError("JSON parsing failed: empty result")
-            }
+            processCorrectedText(correctedText, originalText)
         } catch (e: Exception) {
-            Log.e("GrammarFix", "JSON parsing failed: ${e.message}", e)
-            GrammarResult.NetworkError("JSON parsing failed")
+            Log.e("GrammarFix", "Gemini JSON parsing failed: ${e.message}", e)
+            GrammarResult.NetworkError("Gemini JSON parsing failed")
+        }
+    }
+
+    private fun parseOllamaResponse(responseBody: String, originalText: String): GrammarResult {
+        return try {
+            val jsonObject = Json.parseToJsonElement(responseBody).jsonObject
+            val correctedText = jsonObject["message"]
+                ?.jsonObject?.get("content")
+                ?.jsonPrimitive?.content
+                ?.trim()
+
+            processCorrectedText(correctedText, originalText)
+        } catch (e: Exception) {
+            Log.e("GrammarFix", "Ollama JSON parsing failed: ${e.message}", e)
+            GrammarResult.NetworkError("Ollama JSON parsing failed")
+        }
+    }
+
+    private fun processCorrectedText(correctedText: String?, originalText: String): GrammarResult {
+        return if (!correctedText.isNullOrEmpty()) {
+            if (correctedText == originalText) {
+                GrammarResult.Unchanged("No corrections needed")
+            } else {
+                GrammarResult.Success(correctedText)
+            }
+        } else {
+            GrammarResult.NetworkError("JSON parsing failed: empty result")
         }
     }
 }

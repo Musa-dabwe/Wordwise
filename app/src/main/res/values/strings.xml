@@ -47,4 +47,12 @@
     <string name="info_best_suited_body">Short messages, sentences, and paragraphs. For long documents, break text into sections and fix each one separately.</string>
     <string name="info_quota_note">Free tier: ~1,500 requests/day. Check usage at aistudio.google.com</string>
     <string name="toast_fixed">✓ Fixed!</string>
+
+    <!-- Ollama Integration -->
+    <string name="provider_label">AI Provider</string>
+    <string name="provider_gemini">Gemini</string>
+    <string name="provider_ollama">Ollama Cloud</string>
+    <string name="ollama_key_hint">Ollama API Key</string>
+    <string name="save_ollama_key_button">Save Ollama Key</string>
+    <string name="ollama_key_footer">Get a free API key at ollama.com/settings/keys</string>
 </resources>

@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -14,12 +16,15 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doOnTextChanged
 import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.data.ProviderRepository
 import com.musa.wordwise.databinding.ActivityMainBinding
+import com.musa.wordwise.network.AiProvider
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
+    private val providerRepository by lazy { ProviderRepository(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,8 +42,10 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Load existing API key if present
+        // Load existing state
         loadExistingApiKey()
+        setupProviderSelection()
+        loadExistingOllamaKey()
 
         binding.apiKeyEditText.doOnTextChanged { _, _, _, _ ->
             binding.apiKeyInputLayout.error = null
@@ -60,6 +67,16 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.apiKeyInputLayout.error = getString(R.string.key_empty_error)
                 binding.apiKeyInputLayout.helperText = null
+            }
+        }
+
+        binding.saveOllamaKeyButton.setOnClickListener {
+            val apiKey = binding.ollamaKeyEditText.text.toString().trim()
+            if (apiKey.isNotEmpty()) {
+                providerRepository.saveOllamaKey(apiKey)
+                Toast.makeText(this, getString(R.string.toast_api_key_saved), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, getString(R.string.toast_api_key_empty), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -111,5 +128,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveApiKey(key: String) {
         apiKeyRepository.saveApiKey(key)
+    }
+
+    private fun setupProviderSelection() {
+        val providers = arrayOf(getString(R.string.provider_gemini), getString(R.string.provider_ollama))
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, providers)
+        binding.providerAutoComplete.setAdapter(adapter)
+
+        val currentProvider = providerRepository.getProvider()
+        val selection = if (currentProvider == AiProvider.OLLAMA_CLOUD) 1 else 0
+        binding.providerAutoComplete.setText(providers[selection], false)
+        updateOllamaSectionVisibility(currentProvider)
+
+        binding.providerAutoComplete.setOnItemClickListener { _, _, position, _ ->
+            val provider = if (position == 1) AiProvider.OLLAMA_CLOUD else AiProvider.GEMINI
+            providerRepository.saveProvider(provider)
+            updateOllamaSectionVisibility(provider)
+        }
+    }
+
+    private fun loadExistingOllamaKey() {
+        val existingKey = providerRepository.getOllamaKey()
+        if (!existingKey.isNullOrEmpty()) {
+            binding.ollamaKeyEditText.setText(existingKey)
+        }
+    }
+
+    private fun updateOllamaSectionVisibility(provider: AiProvider) {
+        binding.ollamaKeySection.visibility = if (provider == AiProvider.OLLAMA_CLOUD) View.VISIBLE else View.GONE
     }
 }
