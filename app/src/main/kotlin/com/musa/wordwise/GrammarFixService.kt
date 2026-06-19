@@ -9,7 +9,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.data.ProviderRepository
 import com.musa.wordwise.network.AiClient
+import com.musa.wordwise.network.AiProvider
 import com.musa.wordwise.network.GrammarResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +25,7 @@ class GrammarFixService : AccessibilityService() {
     private fun AccessibilityNodeInfo.safeRecycle() = recycle()
 
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
+    private val providerRepository by lazy { ProviderRepository(this) }
     
     private val shortcut = "?fix"
     private val shortcutRegex = Regex("""\?fix$""")
@@ -34,7 +37,7 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        if (apiKeyRepository.hasApiKey()) {
+        if (apiKeyRepository.hasApiKey() || (providerRepository.getProvider() == AiProvider.OLLAMA_CLOUD && !providerRepository.getOllamaKey().isNullOrBlank())) {
             Log.d("GrammarFix", "Service connected! API Key is present.")
             showToast("WordWise is ready! Type ?fix at the end of your text.")
         } else {
@@ -91,7 +94,21 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-            if (!apiKeyRepository.hasApiKey()) {
+            val currentProvider = providerRepository.getProvider()
+            val geminiKey = apiKeyRepository.getApiKey()
+            val ollamaKey = providerRepository.getOllamaKey()
+
+            // Fallback logic: if Ollama selected but no key, it will use Gemini.
+            // If Gemini selected but no key, it will show error.
+            if (currentProvider == AiProvider.GEMINI && geminiKey.isEmpty()) {
+                showToast(getString(R.string.toast_api_key_empty), long = true)
+                source.safeRecycle()
+                return
+            }
+
+            // If Ollama is selected, we check if key exists. If not, we'll fall back to Gemini logic in AiClient,
+            // but we should still check if Gemini key exists for the fallback.
+            if (currentProvider == AiProvider.OLLAMA_CLOUD && ollamaKey.isNullOrBlank() && geminiKey.isEmpty()) {
                 showToast(getString(R.string.toast_api_key_empty), long = true)
                 source.safeRecycle()
                 return
@@ -114,7 +131,14 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    when (val result = AiClient.fixGrammar(textToFix, apiKeyRepository.getApiKey())) {
+                    val result = AiClient.fixGrammar(
+                        text = textToFix,
+                        apiKey = geminiKey,
+                        provider = currentProvider,
+                        ollamaKey = ollamaKey
+                    )
+
+                    when (result) {
                         is GrammarResult.Success -> {
                             if (result.correctedText != textToFix) {
                                 replaceText(source, result.correctedText)
