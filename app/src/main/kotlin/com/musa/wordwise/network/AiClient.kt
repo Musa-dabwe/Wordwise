@@ -30,7 +30,7 @@ object AiClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private const val SYSTEM_PROMPT = """
+    private val SYSTEM_PROMPT = """
         Correct grammar, spelling, and punctuation in the text below.
 
         RULES:
@@ -61,7 +61,7 @@ object AiClient {
 
         7. CODE-SWITCHING — If the input mixes two or more languages, treat each
         segment in its own language context. Do not normalize to a single language.
-    """
+    """.trimIndent()
 
     suspend fun fixGrammar(
         text: String,
@@ -149,7 +149,7 @@ object AiClient {
             putJsonArray("messages") {
                 addJsonObject {
                     put("role", "system")
-                    put("content", SYSTEM_PROMPT.trimIndent())
+                    put("content", SYSTEM_PROMPT)
                 }
                 addJsonObject {
                     put("role", "user")
