@@ -9,10 +9,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
-import com.musa.wordwise.data.ProviderRepository
 import com.musa.wordwise.network.AiClient
-import com.musa.wordwise.network.AiProvider
-import com.musa.wordwise.network.GrammarResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,7 +22,6 @@ class GrammarFixService : AccessibilityService() {
     private fun AccessibilityNodeInfo.safeRecycle() = recycle()
 
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
-    private val providerRepository by lazy { ProviderRepository(this) }
     
     private val shortcut = "?fix"
     private val shortcutRegex = Regex("""\?fix$""")
@@ -37,13 +33,8 @@ class GrammarFixService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        if (apiKeyRepository.hasApiKey() || (providerRepository.getProvider() == AiProvider.OLLAMA_CLOUD && !providerRepository.getOllamaKey().isNullOrBlank())) {
-            Log.d("GrammarFix", "Service connected! API Key is present.")
-            showToast("WordWise is ready! Type ?fix at the end of your text.")
-        } else {
-            Log.e("GrammarFix", "API Key is missing! Please set it in the app.")
-            showToast("WordWise: Please add your API key in the app settings.")
-        }
+        Log.d("GrammarFix", "Service connected!")
+        showToast("WordWise is ready! Type ?fix at the end of your text.")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -94,21 +85,10 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-            val currentProvider = providerRepository.getProvider()
-            val geminiKey = apiKeyRepository.getApiKey()
-            val ollamaKey = providerRepository.getOllamaKey()
+            val provider = apiKeyRepository.getActiveProvider()
+            val apiKey   = apiKeyRepository.getApiKey(provider)
 
-            // Fallback logic: if Ollama selected but no key, it will use Gemini.
-            // If Gemini selected but no key, it will show error.
-            if (currentProvider == AiProvider.GEMINI && geminiKey.isEmpty()) {
-                showToast(getString(R.string.toast_api_key_empty), long = true)
-                source.safeRecycle()
-                return
-            }
-
-            // If Ollama is selected, we check if key exists. If not, we'll fall back to Gemini logic in AiClient,
-            // but we should still check if Gemini key exists for the fallback.
-            if (currentProvider == AiProvider.OLLAMA_CLOUD && ollamaKey.isNullOrBlank() && geminiKey.isEmpty()) {
+            if (apiKey.isEmpty()) {
                 showToast(getString(R.string.toast_api_key_empty), long = true)
                 source.safeRecycle()
                 return
@@ -131,42 +111,20 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    val result = AiClient.fixGrammar(
-                        text = textToFix,
-                        apiKey = geminiKey,
-                        provider = currentProvider,
-                        ollamaKey = ollamaKey
-                    )
-
-                    when (result) {
-                        is GrammarResult.Success -> {
-                            if (result.correctedText != textToFix) {
-                                replaceText(source, result.correctedText)
+                    when (val result = AiClient.fixGrammar(textToFix, apiKey, provider)) {
+                        is AiClient.Result.Success -> {
+                            if (result.text != textToFix) {
+                                replaceText(source, result.text)
                                 showToast(getString(R.string.toast_fixed))
                             } else {
                                 showToast(getString(R.string.error_unchanged), long = true)
                             }
                         }
-                        is GrammarResult.RateLimited -> {
-                            val message = if (result.retryAfterSeconds != null) {
-                                getString(R.string.error_rate_limited_with_retry, result.retryAfterSeconds)
-                            } else {
-                                getString(R.string.error_rate_limited)
-                            }
-                            showToast(message, long = true)
+                        is AiClient.Result.RateLimited -> {
+                            showToast(result.message, long = true)
                         }
-                        is GrammarResult.AuthError -> {
-                            showToast(getString(R.string.error_auth, result.code), long = true)
-                        }
-                        is GrammarResult.NetworkError -> {
-                            showToast(getString(R.string.error_network, result.message ?: "unknown error"), long = true)
-                        }
-                        is GrammarResult.Unchanged -> {
-                            if (result.reason == "API key is empty") {
-                                showToast(getString(R.string.toast_api_key_empty), long = true)
-                            } else {
-                                showToast(getString(R.string.error_unchanged), long = true)
-                            }
+                        is AiClient.Result.Failure -> {
+                            showToast("Correction failed: ${result.error}", long = true)
                         }
                     }
                 } catch (e: Exception) {

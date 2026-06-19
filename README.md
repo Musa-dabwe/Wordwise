@@ -1,63 +1,62 @@
 # WordWise
 
-System-wide grammar correction for Android using the Gemini API.
-
-WordWise is an Android accessibility service that intercepts text input and sends it to the Google Gemini API for professional grammar and style correction. It operates within any app, triggered by a simple text shortcut.
-
-<!-- TODO: Add screenshot of MainActivity -->
+System-wide grammar correction for Android. Supports Ollama Cloud (free) and Google Gemini.
 
 ## How It Works
 
-WordWise leverages Android's AccessibilityService to monitor `typeViewTextChanged` events. It intelligently detects a specific shortcut typed at the end of your text and replaces the original text with a corrected version.
-
-- **Intelligent Monitoring**: The service only processes text when the trigger shortcut is detected.
-- **Multilingual Support**: Automatically detects and corrects over 100 languages.
-- **Privacy First**: Sensitive fields (passwords, PINs, etc.) are automatically skipped to ensure your credentials are never processed.
-- **Powered by Gemini**: Uses the `gemini-2.5-flash-lite` model for fast, high-quality corrections.
+- **Seamless Integration**: Works in any Android app using a system-wide Accessibility Service.
+- **Shortcuts**: Simply type `?fix` at the end of any text to trigger correction.
+- **Privacy-First**: Your text is processed using your own API keys. No data is stored or logged by WordWise.
+- **Dual-Provider Support**: Choose between Ollama Cloud (free tier, no credit card) and Google Gemini.
+- **Multilingual**: Corrects grammar, spelling, and style in over 100 languages.
 
 ## Setup
 
-1. **Get a Gemini API Key**: Visit [Google AI Studio](https://aistudio.google.com) to generate a free API key.
-2. **Configure WordWise**: Open the WordWise app, enter your API key, and tap **Save API Key**. Your key is stored securely using `EncryptedSharedPreferences`.
-3. **Enable the Service**: Tap **Enable Accessibility Service** to open your device settings, find "WordWise" in the list of services, and turn it on.
+### 1. Install WordWise
+Sideload the APK onto your Android device (requires Android 6.0+).
+
+### 2. Configure AI Provider
+
+#### Option A — Ollama Cloud (recommended, free)
+1. Create a free account at [ollama.com](https://ollama.com).
+2. Generate an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) — no credit card required.
+3. Open WordWise, select **Ollama Cloud (free)** from the provider dropdown, paste your key, and tap **Save API Key**.
+
+#### Option B — Google Gemini
+1. Generate a key at [Google AI Studio](https://aistudio.google.com).
+2. Open WordWise, select **Google Gemini** from the provider dropdown, paste your key, and tap **Save API Key**.
+
+### 3. Enable Accessibility Service
+1. In WordWise, tap **Open Accessibility Settings**.
+2. Find **WordWise** in the list of installed services.
+3. Toggle the switch to **On**.
 
 ## Usage
 
-Simply type your text in any app, followed by the shortcut.
+In any text field (WhatsApp, Slack, Gmail, etc.), type your text followed by the shortcut:
 
-### Example
+> i dont no how to spel?fix
 
-- **Text Correction (`?fix`)**
-  - Type: `The meeting start at 9am?fix`
-  - Result: `The meeting starts at 9:00 AM.`
+Wait 2–3 seconds, and it will be replaced with:
 
-- **Paragraph Correction (`?fix`)**
-  - Type: `i went to the store today. i bought some milk and bread. it was very crowded?fix`
-  - Result: `I went to the store today and bought some milk and bread. It was very crowded.`
-
-<!-- TODO: Add demo gif of ?fix in action -->
+> I don't know how to spell.
 
 ## Security & Privacy
 
-WordWise is designed with security as a priority:
-
-- **Secure Key Storage**: API keys are stored using `EncryptedSharedPreferences` (AES-256-GCM).
-- **Sensitive Field Filtering**: The app explicitly skips fields marked as passwords or sensitive numeric inputs.
-- **Zero Logging**: User text and API keys are never logged to Logcat or any external server (other than the Gemini API).
-- **Network Security**: Cleartext traffic is disabled via `network_security_config.xml`, ensuring all API communication is encrypted.
-- **Minimal Transmission**: Text is only sent to Google Gemini when a shortcut is explicitly typed.
-- **API Authentication**: The API key is transmitted as a URL query parameter, which is the standard mechanism for the Gemini API.
+- **Local Encryption**: API keys are stored using `EncryptedSharedPreferences` (AES-256-GCM).
+- **API Authentication**:
+  - **Ollama**: Key transmitted as an HTTP `Authorization: Bearer` header (more secure, not visible in server logs).
+  - **Gemini**: Key transmitted as a URL query parameter (standard Google mechanism, encrypted via TLS).
+- **No Data Retention**: Text is sent directly to the selected AI provider. WordWise does not log or store any text.
 
 ## Limitations
 
-- **Accessibility Permission**: Requires broad accessibility permissions to monitor and replace text, which is inherent to how the app functions.
-- **App Compatibility**: Text replacement may not function correctly in some apps, such as those using WebViews or highly custom UI frameworks. WordWise will now notify you with a toast if replacement fails.
-- **Connectivity**: Requires an active internet connection to communicate with the Gemini API. No offline mode is available.
+- **Free-tier Quota (Ollama Cloud)**: The Ollama Cloud free tier uses session-based and weekly GPU-time limits. Quota resets approximately every 5 hours per session. Upgrade to Ollama Pro for higher limits.
+- **Field Support**: Some highly secure fields (passwords) or custom-drawn views may not support text replacement.
 
 ## Tech Stack
 
 - **Language**: Kotlin
-- **Networking**: OkHttp
-- **Serialization**: kotlinx.serialization
-- **Storage**: EncryptedSharedPreferences (Android Jetpack Security)
-- **AI**: Google Gemini API (`gemini-2.5-flash-lite`)
+- **Networking**: OkHttp 4
+- **AI**: Ollama Cloud API (`gemma4:e2b`) · Google Gemini API (`gemini-2.5-flash-lite`)
+- **Architecture**: MVVM (ViewBinding)

@@ -50,9 +50,17 @@
 
     <!-- Ollama Integration -->
     <string name="provider_label">AI Provider</string>
-    <string name="provider_gemini">Gemini</string>
-    <string name="provider_ollama">Ollama Cloud</string>
     <string name="ollama_key_hint">Ollama API Key</string>
     <string name="save_ollama_key_button">Save Ollama Key</string>
     <string name="ollama_key_footer">Get a free API key at ollama.com/settings/keys</string>
+
+    <string name="label_ai_provider">AI Provider</string>
+    <string name="label_api_key">API Key</string>
+    <string name="hint_api_key_ollama">ollama_...</string>
+    <string name="hint_api_key_gemini">AIza...</string>
+    <string name="link_get_key_prefix">Get a free key at </string>
+    <string name="label_api_key_ollama">Ollama API Key</string>
+    <string name="label_api_key_gemini">Gemini API Key</string>
+    <string name="provider_ollama">Ollama Cloud (free)</string>
+    <string name="provider_gemini">Google Gemini</string>
 </resources>
