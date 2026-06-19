@@ -1,249 +1,169 @@
 package com.musa.wordwise.network
 
-import android.util.Log
+import com.musa.wordwise.data.Provider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-enum class AiProvider {
-    GEMINI,
-    OLLAMA_CLOUD
-}
-
-sealed class GrammarResult {
-    data class Success(val correctedText: String) : GrammarResult()
-    data class RateLimited(val retryAfterSeconds: Int?) : GrammarResult()
-    data class AuthError(val code: Int) : GrammarResult()
-    data class NetworkError(val message: String?) : GrammarResult()
-    data class Unchanged(val reason: String) : GrammarResult()
-}
-
+/**
+ * Singleton AI client. Supports Ollama Cloud and Google Gemini as backends,
+ * selected at call time via the [Provider] argument.
+ *
+ * OkHttpClient is shared across all calls to reuse the connection pool.
+ */
 object AiClient {
+
+    // ── Ollama Cloud ──────────────────────────────────────────────────────────
+    private const val OLLAMA_BASE_URL     = "https://ollama.com"
+    private const val OLLAMA_CHAT_URL     = "$OLLAMA_BASE_URL/api/chat"
+    // Lightest cloud model — smallest GPU footprint minimises free-tier quota burn.
+    // Grammar correction is a short-context task; a 2B model is sufficient.
+    private const val OLLAMA_DEFAULT_MODEL = "gemma4:e2b"
+
+    // ── Google Gemini ─────────────────────────────────────────────────────────
+    private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+    private const val GEMINI_MODEL    = "gemini-2.5-flash-lite"
+
+    // ── Shared HTTP client ────────────────────────────────────────────────────
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)   // Ollama cloud cold-starts can be slow
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val SYSTEM_PROMPT = """
-        Correct grammar, spelling, and punctuation in the text below.
-
-        RULES:
-
-        1. LANGUAGE — Automatically detect the input language and correct within
-        that language. NEVER translate. If the input mixes multiple languages,
-        preserve the mix and correct each segment in its own language.
-        Supported languages include: Swahili, Chinyanja, Nyanja, Bemba, Tonga, Lozi, Kaonde, Luvale, Zulu, Xhosa, Shona, Ndebele, Sotho, Tswana, Venda, Tsonga, Afrikaans, Amharic, Hausa, Yoruba, Igbo, Twi, Wolof, Somali, Tigrinya, Oromo, Kinyarwanda, Kirundi, Luganda, Lingala, Kikuyu, Dholuo, Fula, Bambara, Ewe, Akan, Ga, Igala, Kanuri, Malagasy, Sango, Chichewa, English, French, Spanish, Portuguese, German, Italian, Dutch, Russian, Polish, Ukrainian, Romanian, Czech, Slovak, Hungarian, Greek, Swedish, Norwegian, Danish, Finnish, Croatian, Serbian, Bulgarian, Catalan, Turkish, Albanian, Macedonian, Slovenian, Estonian, Latvian, Lithuanian, Welsh, Irish, Basque, Maltese, Icelandic, Luxembourgish, Belarusian, Georgian, Armenian, Azerbaijani, Mandarin Chinese, Cantonese, Japanese, Korean, Hindi, Bengali, Urdu, Tamil, Telugu, Marathi, Gujarati, Punjabi, Kannada, Malayalam, Odia, Assamese, Nepali, Sinhala, Thai, Vietnamese, Indonesian, Malay, Tagalog, Burmese, Khmer, Lao, Javanese, Sundanese, Cebuano, Mongolian, Tibetan, Uyghur, Kazakh, Uzbek, Kyrgyz, Tajik, Turkmen, Pashto, Dari, Farsi, Kurdish, Hebrew, Arabic, Aramaic, Haitian Creole, Jamaican Patois, Quechua, Guaraní, Nahuatl, Māori, Hawaiian, Samoan, Tongan, Fijian, Tok Pisin.
-
-        2. STRUCTURE — Preserve ALL line breaks, paragraph separations, and
-        sentence boundaries exactly as written. NEVER merge two sentences into
-        one. NEVER split one sentence into two. NEVER reorder content.
-
-        3. TONE — Preserve the original tone, style, and meaning. Do not rephrase
-        for style. Do not add words not implied. Do not remove words unless they
-        are clearly duplicates or errors.
-
-        4. OUTPUT — Output ONLY the corrected text. No explanations, no
-        commentary, no labels, no quotation marks. If the text is already
-        correct, return it exactly as received.
-
-        5. CAPITALISATION — Always capitalise the first letter of the
-        corrected output, regardless of how the input started. Every
-        sentence in the output must start with a capital letter.
-
-        6. SHORT TEXT — If the input is one or two words, correct obvious spelling
-        errors only. Do not add punctuation that was not there.
-
-        7. CODE-SWITCHING — If the input mixes two or more languages, treat each
-        segment in its own language context. Do not normalize to a single language.
-    """.trimIndent()
-
-    suspend fun fixGrammar(
-        text: String,
-        apiKey: String,
-        provider: AiProvider = AiProvider.GEMINI,
-        ollamaKey: String? = null
-    ): GrammarResult = withContext(Dispatchers.IO) {
-        if (provider == AiProvider.OLLAMA_CLOUD && !ollamaKey.isNullOrBlank()) {
-            fixGrammarOllama(text, ollamaKey)
-        } else {
-            fixGrammarGemini(text, apiKey)
-        }
+    // ── Result type ───────────────────────────────────────────────────────────
+    sealed class Result {
+        data class Success(val text: String) : Result()
+        data class RateLimited(val message: String) : Result()
+        data class Failure(val error: String) : Result()
     }
 
-    private suspend fun fixGrammarGemini(text: String, apiKey: String): GrammarResult {
-        if (apiKey.isEmpty()) {
-            return GrammarResult.Unchanged("API key is empty")
-        }
+    // ── Public API ────────────────────────────────────────────────────────────
 
-        val prompt = "$SYSTEM_PROMPT\n\nText: $text"
-
-        val jsonBody = buildJsonObject {
-            putJsonArray("contents") {
-                addJsonObject {
-                    putJsonArray("parts") {
-                        addJsonObject {
-                            put("text", prompt)
-                        }
-                    }
-                }
-            }
-            putJsonObject("generationConfig") {
-                put("temperature", 0.1)
-                put("maxOutputTokens", 4000)
+    /**
+     * Sends [text] to the chosen [provider] for grammar and style correction.
+     * Returns a [Result] — callers must handle all three cases.
+     *
+     * This function owns its own [withContext] switch. The call site in
+     * GrammarFixService must NOT wrap this call in another withContext.
+     */
+    suspend fun fixGrammar(text: String, apiKey: String, provider: Provider): Result =
+        withContext(Dispatchers.IO) {
+            when (provider) {
+                Provider.OLLAMA -> fixGrammarOllama(text, apiKey)
+                Provider.GEMINI -> fixGrammarGemini(text, apiKey)
             }
         }
 
-        val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+    // ── Ollama implementation ─────────────────────────────────────────────────
 
-        Log.d("GrammarFix", "Sending request to Gemini...")
-        Log.d("GrammarFix", "Input length: ${text.length} chars")
-
-        return try {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-                "gemini-2.5-flash-lite:generateContent?key=$apiKey"
-
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("Content-Type", "application/json")
-                .post(requestBody)
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string()
-                Log.d("GrammarFix", "Response code: ${response.code}")
-
-                when {
-                    response.code == 429 -> {
-                        val retryAfter = response.header("Retry-After")?.toIntOrNull()
-                        GrammarResult.RateLimited(retryAfter)
-                    }
-                    response.code == 401 || response.code == 403 -> {
-                        GrammarResult.AuthError(response.code)
-                    }
-                    !response.isSuccessful -> {
-                        GrammarResult.NetworkError("${response.code} ${response.message}")
-                    }
-                    responseBody == null -> {
-                        GrammarResult.NetworkError("Empty response body")
-                    }
-                    else -> {
-                        parseGeminiResponse(responseBody, text)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("GrammarFix", "Network error: ${e.message}", e)
-            GrammarResult.NetworkError(e.message)
-        }
-    }
-
-    private suspend fun fixGrammarOllama(text: String, apiKey: String): GrammarResult {
-        val jsonBody = buildJsonObject {
-            put("model", "nemotron-3-nano:cloud")
-            putJsonArray("messages") {
-                addJsonObject {
+    private fun fixGrammarOllama(text: String, apiKey: String): Result {
+        val body = buildJsonObject {
+            put("model", OLLAMA_DEFAULT_MODEL)
+            put("stream", false)
+            put("messages", buildJsonArray {
+                add(buildJsonObject {
                     put("role", "system")
-                    put("content", SYSTEM_PROMPT)
-                }
-                addJsonObject {
+                    put("content", GRAMMAR_SYSTEM_PROMPT)
+                })
+                add(buildJsonObject {
                     put("role", "user")
                     put("content", text)
-                }
-            }
-            put("stream", false)
-        }
+                })
+            })
+        }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
-        val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(OLLAMA_CHAT_URL)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(body)
+            .build()
 
-        Log.d("GrammarFix", "Sending request to Ollama Cloud...")
-        Log.d("GrammarFix", "Input length: ${text.length} chars")
-
-        return try {
-            val request = Request.Builder()
-                .url("https://ollama.com/api/chat")
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("Content-Type", "application/json")
-                .post(requestBody)
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string()
-                Log.d("GrammarFix", "Ollama Response code: ${response.code}")
-
-                when {
-                    response.code == 429 -> {
-                        val retryAfter = response.header("Retry-After")?.toIntOrNull()
-                        GrammarResult.RateLimited(retryAfter)
-                    }
-                    response.code == 401 || response.code == 403 -> {
-                        GrammarResult.AuthError(response.code)
-                    }
-                    !response.isSuccessful -> {
-                        GrammarResult.NetworkError("${response.code} ${response.message}")
-                    }
-                    responseBody == null -> {
-                        GrammarResult.NetworkError("Empty response body")
-                    }
-                    else -> {
-                        parseOllamaResponse(responseBody, text)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("GrammarFix", "Ollama network error: ${e.message}", e)
-            GrammarResult.NetworkError(e.message)
+        return executeRequest(request) { responseBody ->
+            Json.parseToJsonElement(responseBody)
+                .jsonObject["message"]
+                ?.jsonObject?.get("content")
+                ?.jsonPrimitive?.content
+                ?: error("Unexpected Ollama response shape")
         }
     }
 
-    private fun parseGeminiResponse(responseBody: String, originalText: String): GrammarResult {
-        return try {
-            val jsonObject = Json.parseToJsonElement(responseBody).jsonObject
-            val correctedText = jsonObject["candidates"]
-                ?.jsonArray?.get(0)
+    // ── Gemini implementation ─────────────────────────────────────────────────
+
+    private fun fixGrammarGemini(text: String, apiKey: String): Result {
+        val body = buildJsonObject {
+            put("contents", buildJsonArray {
+                add(buildJsonObject {
+                    put("parts", buildJsonArray {
+                        add(buildJsonObject { put("text", "$GRAMMAR_SYSTEM_PROMPT\n\n$text") })
+                    })
+                })
+            })
+        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+
+        val request = Request.Builder()
+            .url("$GEMINI_BASE_URL/$GEMINI_MODEL:generateContent?key=$apiKey")
+            .post(body)
+            .build()
+
+        return executeRequest(request) { responseBody ->
+            Json.parseToJsonElement(responseBody)
+                .jsonObject["candidates"]
+                ?.let { arr -> arr.jsonArray[0] }
                 ?.jsonObject?.get("content")
                 ?.jsonObject?.get("parts")
-                ?.jsonArray?.get(0)
+                ?.let { arr -> arr.jsonArray[0] }
                 ?.jsonObject?.get("text")
                 ?.jsonPrimitive?.content
-                ?.trim()
-
-            processCorrectedText(correctedText, originalText)
-        } catch (e: Exception) {
-            Log.e("GrammarFix", "Gemini JSON parsing failed: ${e.message}", e)
-            GrammarResult.NetworkError("Gemini JSON parsing failed")
+                ?: error("Unexpected Gemini response shape")
         }
     }
 
-    private fun parseOllamaResponse(responseBody: String, originalText: String): GrammarResult {
-        return try {
-            val jsonObject = Json.parseToJsonElement(responseBody).jsonObject
-            val correctedText = jsonObject["message"]
-                ?.jsonObject?.get("content")
-                ?.jsonPrimitive?.content
-                ?.trim()
+    // ── Shared utilities ──────────────────────────────────────────────────────
 
-            processCorrectedText(correctedText, originalText)
-        } catch (e: Exception) {
-            Log.e("GrammarFix", "Ollama JSON parsing failed: ${e.message}", e)
-            GrammarResult.NetworkError("Ollama JSON parsing failed")
-        }
-    }
+    private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
-    private fun processCorrectedText(correctedText: String?, originalText: String): GrammarResult {
-        return if (!correctedText.isNullOrEmpty()) {
-            if (correctedText == originalText) {
-                GrammarResult.Unchanged("No corrections needed")
-            } else {
-                GrammarResult.Success(correctedText)
+    private const val GRAMMAR_SYSTEM_PROMPT =
+        "You are a grammar and style correction assistant. " +
+        "Return only the corrected text. " +
+        "Preserve the original language and meaning exactly. " +
+        "Do not add any explanations, commentary, or quotation marks."
+
+    /**
+     * Executes the [request], delegates response body parsing to [parseBody],
+     * and maps HTTP error codes to the appropriate [Result] subtype.
+     */
+    private inline fun executeRequest(
+        request: Request,
+        parseBody: (String) -> String,
+    ): Result {
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                when (response.code) {
+                    200 -> {
+                        val raw = response.body?.string()
+                            ?: return Result.Failure("Empty response body")
+                        Result.Success(parseBody(raw))
+                    }
+                    401 -> Result.Failure("Invalid API key — check your key and try again")
+                    429 -> Result.RateLimited(
+                        "Free-tier quota reached — try again later (resets every ~5 hours)"
+                    )
+                    else -> Result.Failure("HTTP ${response.code} from provider")
+                }
             }
-        } else {
-            GrammarResult.NetworkError("JSON parsing failed: empty result")
-        }
+        }.getOrElse { Result.Failure(it.message ?: "Network error") }
     }
 }

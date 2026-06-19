@@ -16,16 +16,39 @@ class ApiKeyRepository(private val context: Context) {
         )
     }
 
-    fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
-
-    fun saveApiKey(key: String) {
-        prefs.edit().putString(KEY_API_KEY, key).apply()
+    fun saveApiKey(provider: Provider, key: String) {
+        val prefKey = when (provider) {
+            Provider.OLLAMA -> KEY_API_KEY_OLLAMA
+            Provider.GEMINI -> KEY_API_KEY_GEMINI
+        }
+        prefs.edit().putString(prefKey, key).apply()
     }
 
-    fun hasApiKey(): Boolean = getApiKey().isNotEmpty()
+    fun getApiKey(provider: Provider): String {
+        val prefKey = when (provider) {
+            Provider.OLLAMA -> KEY_API_KEY_OLLAMA
+            Provider.GEMINI -> KEY_API_KEY_GEMINI
+        }
+        return prefs.getString(prefKey, "") ?: ""
+    }
+
+    fun saveActiveProvider(provider: Provider) {
+        prefs.edit().putString(KEY_ACTIVE_PROVIDER, provider.name).apply()
+    }
+
+    fun getActiveProvider(): Provider {
+        val saved = prefs.getString(KEY_ACTIVE_PROVIDER, null)
+        return if (saved != null) {
+            runCatching { Provider.valueOf(saved) }.getOrDefault(Provider.OLLAMA)
+        } else {
+            Provider.OLLAMA
+        }
+    }
 
     companion object {
         private const val PREFS_NAME = "secret_keys"
-        private const val KEY_API_KEY = "api_key"
+        private const val KEY_ACTIVE_PROVIDER = "active_provider"
+        private const val KEY_API_KEY_OLLAMA  = "api_key_ollama"
+        private const val KEY_API_KEY_GEMINI  = "api_key_gemini"
     }
 }

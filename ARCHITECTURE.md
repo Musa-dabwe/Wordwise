@@ -1,74 +1,46 @@
-# WordWise Architecture
+# Architecture — WordWise
 
-**Date**: 2026-06-07 (Post-Audit Update)
-**App Version**: 1.0 (Targeting SDK 35)
-**Project Stats**: 4 Kotlin source files, ~450 lines of code.
+**Date**: 2026-06-07 (Multi-provider update)
+
+## Overview
+
+WordWise is a system-wide accessibility-based utility that provides grammar correction across all Android applications. It operates by monitoring text changes via an `AccessibilityService`, detecting a specific trigger shortcut (`?fix`), and using a remote LLM to perform corrections.
 
 ## Component Map
 
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **MainActivity** | `MainActivity.kt` | Key entry UI, service status monitoring, and accessibility settings linking. |
-| **GrammarFixService** | `GrammarFixService.kt` | AccessibilityService lifecycle, shortcut detection, sensitive field filtering, and text replacement. |
-| **ApiKeyRepository** | `ApiKeyRepository.kt` | Secure storage of API keys using `EncryptedSharedPreferences`. Single source of truth. |
-| **AiClient** | `AiClient.kt` | Singleton managing OkHttpClient and Gemini API. Single fixGrammar(text, apiKey) endpoint. |
-| **FixMode enum** | `AiClient.kt` | Retired in v2 — replaced by unified multilingual prompt |
-| **Manifest** | `AndroidManifest.xml` | App permissions, service declarations, and network security references. |
-| **Config** | `accessibility_service_config.xml` | Declarative accessibility service properties (event types, flags). |
-| **Network Config** | `network_security_config.xml` | Policy for disabling cleartext traffic and defining trust anchors. |
-| **ProGuard** | `proguard-rules.pro` | Minification and obfuscation rules for release builds. |
-| **Build** | `build.gradle.kts` | Dependency management and build configuration. |
+| Component | File | Description |
+|---|---|---|
+| **GrammarFixService** | `GrammarFixService.kt` | The core AccessibilityService. Monitors window state and text changes. Dispatches correction requests to AiClient. |
+| **AiClient** | `AiClient.kt` | Singleton managing OkHttpClient, Ollama Cloud, and Gemini backends. fixGrammar(text, apiKey, provider) routes to the correct backend. Returns a sealed Result type. |
+| **ApiKeyRepository** | `ApiKeyRepository.kt` | Secure storage of per-provider API keys and active provider selection using EncryptedSharedPreferences. Single source of truth. |
+| **Provider enum** | `Provider.kt` | Enumerates supported AI backends (OLLAMA, GEMINI) with display metadata. Drives the UI dropdown and AiClient routing. |
+| **MainActivity** | `MainActivity.kt` | Configuration UI for API keys, provider selection, and service status monitoring. |
 
-## Architecture Diagram
+## Flow Diagram
 
 ```mermaid
 graph TD
     User((User)) -- types shortcut --> GFS[GrammarFixService]
 
     subgraph App Logic
-        GFS -- reads key --> AKR[ApiKeyRepository]
+        GFS -- reads provider + key --> AKR[ApiKeyRepository]
         GFS -- requests fix --> AIC[AiClient]
-        MA[MainActivity] -- saves key --> AKR
+        MA[MainActivity] -- saves provider + key --> AKR
+        MA -- reads provider --> PRV[Provider enum]
     end
 
-    AIC -- TLS Request --> Gemini[Gemini API]
+    AIC -- TLS · Bearer token --> Ollama[Ollama Cloud API]
+    AIC -- TLS · ?key= param --> Gemini[Gemini API]
+    Ollama -- Correction --> AIC
     Gemini -- Correction --> AIC
-    AIC -- Success --> GFS
+    AIC -- Result.Success/Failure/RateLimited --> GFS
     GFS -- replaceText --> Field((Input Field))
 ```
 
 ## Key Design Decisions
 
-- **AccessibilityService**: Chosen to provide system-wide functionality without requiring a custom keyboard implementation. It allows WordWise to work across all apps seamlessly.
-- **ApiKeyRepository (Lazy Init)**: Centralizes key access with an `EncryptedSharedPreferences` wrapper. Using a lazy initializer ensures the master key is only built when needed, and it acts as the single source of truth for both the UI and the service.
-- **AiClient Object Singleton**: Consolidates network logic into a single object. This ensures connection pooling via a single `OkHttpClient` instance, reducing overhead for multiple sequential requests.
-- **serviceScope + SupervisorJob**: The service manages its own coroutine lifecycle. Using a `SupervisorJob` ensures that a failure in one correction request doesn't crash the entire service, while the `serviceScope` ensures all pending work is cancelled when the service is destroyed.
-- **Fail-Safe Filtering**: Sensitive field filtering (passwords/PINs) is performed immediately upon receiving an accessibility event. This is a fail-safe approach that ensures data never leaves the node if the field is marked as sensitive.
-- **Unified Prompt (v2):** Three scope-specific prompts produced unreliable
-  results — ?fixs merged sentences, ?fixp fixed the wrong scope. A single
-  context-aware multilingual prompt delegates scope and language detection
-  to Gemini, which handles both more reliably than explicit scope instructions.
-
-## Known Limitations
-
-- **`safeRecycle()` Extension**: Uses a private extension function with `@Suppress("DEPRECATION")` to call `recycle()` on `AccessibilityNodeInfo`. This suppresses API 33 deprecation warnings while preserving minSdk compatibility for older Android versions.
-- **Text Replacement Reliability**: Replacement may fail in complex views (e.g., certain WebViews or custom-drawn text editors) that do not properly implement the accessibility `ACTION_SET_TEXT` protocol.
-- **Single Pending Job**: Only one correction can be in-flight at a time. If a user triggers a second shortcut before the first one completes, the first one is cancelled.
-- **inputType Edge Cases**: While standard password fields are filtered, custom keyboard implementations or non-standard apps may occasionally use `inputType` values that bypass current filters.
-- Single ?fix shortcut only — no user-selectable scope control.
-  Planned as a future feature if user feedback requests it.
-
-## Resolved Issues
-
-| Category | Summary of Fixes |
-|----------|------------------|
-| **Accessibility** | Resolved EDGE-5 (shortcut left in field) and EDGE-2 (missing failure feedback). |
-| **Functional** | Fixed text extraction for shortcuts; implemented full field reading. |
-| **Memory** | Implemented proper node recycling in `finally` blocks to prevent leaks. |
-| **Concurrency** | Migrated to tracked `pendingJob` with proper cancellation logic. |
-| **Security** | Switched to `EncryptedSharedPreferences`; disabled cleartext traffic; sanitized Logcat. |
-| **Performance** | Migrated `AiClient` to a singleton to reuse the HTTP client and connection pool. |
-| **Modernization** | Updated Gemini model and API endpoint to the latest stable versions. |
-| Prompt scope bugs | ?fixs merged sentences; ?fixp fixed wrong scope | Unified prompt + single ?fix shortcut | v2 |
-
-*Note: The detailed historical audit report (including individual severity ratings and recommendation tables) is preserved in the git history for reference.*
+- **Dual-Provider Design**: AiClient routes to Ollama Cloud or Google Gemini based on the Provider enum value stored in ApiKeyRepository. The active provider is persisted alongside its API key, so the service always uses the user's last configured choice without requiring MainActivity to be open. The sealed Result type (Success / Failure / RateLimited) gives GrammarFixService typed, exhaustive handling of all outcomes, including Ollama's free-tier quota errors.
+- **Accessibility vs. IME**: WordWise uses an AccessibilityService instead of a custom Input Method Editor (IME) to remain keyboard-agnostic. Users can keep using Gboard, SwiftKey, or any other keyboard.
+- **Unified Prompt (v2)**: The system uses a strict "Return only corrected text" instruction set, which handles both more reliably than explicit scope instructions. The same unified prompt is used for both Ollama and Gemini backends.
+- **OkHttp Singleton**: A shared `OkHttpClient` is used in `AiClient` to take advantage of connection pooling and keep the app's memory footprint low.
+- **No Local DB**: To minimize complexity and security surface area, WordWise uses only `EncryptedSharedPreferences`. No SQLite/Room database is present.
