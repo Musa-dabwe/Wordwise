@@ -1,9 +1,10 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
     <!-- Base application theme. -->
-    <style name="Base.AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Base.AppTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/ww_bg_primary</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
 
         <item name="colorPrimary">@color/ww_accent</item>
         <item name="colorPrimaryVariant">@color/ww_accent_button</item>

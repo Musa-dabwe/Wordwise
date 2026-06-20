@@ -231,3 +231,5 @@ DC-04: Confirmed buildJsonObject/parseToJsonElement usage does not generate clas
 - DC-06: tools namespace in themes.xml — low risk, may cause IDE lint noise
 - DC-07: android:roundIcon — convention, keep for round icon support
 - DC-08: Deprecated MasterKeys API in ApiKeyRepository — needs replacement with MasterKey.Builder, tracked as a separate refactor task
+
+| Ollama removal | Provider enum, Ollama backend, spinner UI, Ollama strings | Removed | Single-provider Gemini hardcode. DC-06 also closed. |
