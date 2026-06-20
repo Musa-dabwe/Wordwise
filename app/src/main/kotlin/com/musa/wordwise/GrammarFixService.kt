@@ -85,8 +85,8 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-            val provider = apiKeyRepository.getActiveProvider()
-            val apiKey   = apiKeyRepository.getApiKey(provider)
+
+            val apiKey = apiKeyRepository.getApiKey()
 
             if (apiKey.isEmpty()) {
                 showToast(getString(R.string.toast_api_key_empty), long = true)
@@ -111,7 +111,7 @@ class GrammarFixService : AccessibilityService() {
                         return@launch
                     }
 
-                    when (val result = AiClient.fixGrammar(textToFix, apiKey, provider)) {
+                    when (val result = AiClient.fixGrammar(textToFix, apiKey)) {
                         is AiClient.Result.Success -> {
                             if (result.text != textToFix) {
                                 replaceText(source, result.text)

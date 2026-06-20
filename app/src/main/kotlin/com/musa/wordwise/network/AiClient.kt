@@ -1,6 +1,5 @@
 package com.musa.wordwise.network
 
-import com.musa.wordwise.data.Provider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -18,19 +17,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
- * Singleton AI client. Supports Ollama Cloud and Google Gemini as backends,
- * selected at call time via the [Provider] argument.
+ * Singleton AI client for Google Gemini.
  *
  * OkHttpClient is shared across all calls to reuse the connection pool.
  */
 object AiClient {
-
-    // ── Ollama Cloud ──────────────────────────────────────────────────────────
-    private const val OLLAMA_BASE_URL     = "https://ollama.com"
-    private const val OLLAMA_CHAT_URL     = "$OLLAMA_BASE_URL/api/chat"
-    // Lightest cloud model — smallest GPU footprint minimises free-tier quota burn.
-    // Grammar correction is a short-context task; a 2B model is sufficient.
-    private const val OLLAMA_DEFAULT_MODEL = "gemma4:e2b"
 
     // ── Google Gemini ─────────────────────────────────────────────────────────
     private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -39,7 +30,7 @@ object AiClient {
     // ── Shared HTTP client ────────────────────────────────────────────────────
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)   // Ollama cloud cold-starts can be slow
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
@@ -53,52 +44,16 @@ object AiClient {
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
-     * Sends [text] to the chosen [provider] for grammar and style correction.
+     * Sends [text] to Gemini for grammar and style correction.
      * Returns a [Result] — callers must handle all three cases.
      *
      * This function owns its own [withContext] switch. The call site in
      * GrammarFixService must NOT wrap this call in another withContext.
      */
-    suspend fun fixGrammar(text: String, apiKey: String, provider: Provider): Result =
+    suspend fun fixGrammar(text: String, apiKey: String): Result =
         withContext(Dispatchers.IO) {
-            when (provider) {
-                Provider.OLLAMA -> fixGrammarOllama(text, apiKey)
-                Provider.GEMINI -> fixGrammarGemini(text, apiKey)
-            }
+            fixGrammarGemini(text, apiKey)
         }
-
-    // ── Ollama implementation ─────────────────────────────────────────────────
-
-    private fun fixGrammarOllama(text: String, apiKey: String): Result {
-        val body = buildJsonObject {
-            put("model", OLLAMA_DEFAULT_MODEL)
-            put("stream", false)
-            put("messages", buildJsonArray {
-                add(buildJsonObject {
-                    put("role", "system")
-                    put("content", GRAMMAR_SYSTEM_PROMPT)
-                })
-                add(buildJsonObject {
-                    put("role", "user")
-                    put("content", text)
-                })
-            })
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
-
-        val request = Request.Builder()
-            .url(OLLAMA_CHAT_URL)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .post(body)
-            .build()
-
-        return executeRequest(request) { responseBody ->
-            Json.parseToJsonElement(responseBody)
-                .jsonObject["message"]
-                ?.jsonObject?.get("content")
-                ?.jsonPrimitive?.content
-                ?: error("Unexpected Ollama response shape")
-        }
-    }
 
     // ── Gemini implementation ─────────────────────────────────────────────────
 
@@ -107,14 +62,14 @@ object AiClient {
             put("contents", buildJsonArray {
                 add(buildJsonObject {
                     put("parts", buildJsonArray {
-                        add(buildJsonObject { put("text", "$GRAMMAR_SYSTEM_PROMPT\n\n$text") })
+                        add(buildJsonObject { put("text", "\n\n") })
                     })
                 })
             })
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
-            .url("$GEMINI_BASE_URL/$GEMINI_MODEL:generateContent?key=$apiKey")
+            .url("/:generateContent?key=")
             .post(body)
             .build()
 
@@ -159,9 +114,9 @@ object AiClient {
                     }
                     401 -> Result.Failure("Invalid API key — check your key and try again")
                     429 -> Result.RateLimited(
-                        "Free-tier quota reached — try again later (resets every ~5 hours)"
+                        "Free-tier quota reached — please try again later"
                     )
-                    else -> Result.Failure("HTTP ${response.code} from provider")
+                    else -> Result.Failure("HTTP ${response.code} from Gemini")
                 }
             }
         }.getOrElse { Result.Failure(it.message ?: "Network error") }

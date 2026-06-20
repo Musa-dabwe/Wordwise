@@ -1,13 +1,11 @@
 # WordWise
 
-System-wide grammar correction for Android. Supports Ollama Cloud (free) and Google Gemini.
 
 ## How It Works
 
 - **Seamless Integration**: Works in any Android app using a system-wide Accessibility Service.
 - **Shortcuts**: Simply type `?fix` at the end of any text to trigger correction.
 - **Privacy-First**: Your text is processed using your own API keys. No data is stored or logged by WordWise.
-- **Dual-Provider Support**: Choose between Ollama Cloud (free tier, no credit card) and Google Gemini.
 - **Multilingual**: Corrects grammar, spelling, and style in over 100 languages.
 
 ## Setup
@@ -17,10 +15,8 @@ Sideload the APK onto your Android device (requires Android 6.0+).
 
 ### 2. Configure AI Provider
 
-#### Option A — Ollama Cloud (recommended, free)
 1. Create a free account at [ollama.com](https://ollama.com).
 2. Generate an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) — no credit card required.
-3. Open WordWise, select **Ollama Cloud (free)** from the provider dropdown, paste your key, and tap **Save API Key**.
 
 #### Option B — Google Gemini
 1. Generate a key at [Google AI Studio](https://aistudio.google.com).
@@ -45,18 +41,15 @@ Wait 2–3 seconds, and it will be replaced with:
 
 - **Local Encryption**: API keys are stored using `EncryptedSharedPreferences` (AES-256-GCM).
 - **API Authentication**:
-  - **Ollama**: Key transmitted as an HTTP `Authorization: Bearer` header (more secure, not visible in server logs).
   - **Gemini**: Key transmitted as a URL query parameter (standard Google mechanism, encrypted via TLS).
 - **No Data Retention**: Text is sent directly to the selected AI provider. WordWise does not log or store any text.
 
 ## Limitations
 
-- **Free-tier Quota (Ollama Cloud)**: The Ollama Cloud free tier uses session-based and weekly GPU-time limits. Quota resets approximately every 5 hours per session. Upgrade to Ollama Pro for higher limits.
 - **Field Support**: Some highly secure fields (passwords) or custom-drawn views may not support text replacement.
 
 ## Tech Stack
 
 - **Language**: Kotlin
 - **Networking**: OkHttp 4
-- **AI**: Ollama Cloud API (`gemma4:e2b`) · Google Gemini API (`gemini-2.5-flash-lite`)
 - **Architecture**: MVVM (ViewBinding)
