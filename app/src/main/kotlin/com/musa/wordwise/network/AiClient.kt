@@ -52,37 +52,47 @@ object AiClient {
      */
     suspend fun fixGrammar(text: String, apiKey: String): Result =
         withContext(Dispatchers.IO) {
-            fixGrammarGemini(text, apiKey)
+            fixGrammarGemini(text, apiKey, GRAMMAR_SYSTEM_PROMPT)
         }
 
     // ── Gemini implementation ─────────────────────────────────────────────────
 
-    private fun fixGrammarGemini(text: String, apiKey: String): Result {
+    private fun fixGrammarGemini(
+        text: String,
+        apiKey: String,
+        systemPrompt: String
+    ): Result {
         val body = buildJsonObject {
             put("contents", buildJsonArray {
                 add(buildJsonObject {
+                    put("role", "user")
                     put("parts", buildJsonArray {
-                        add(buildJsonObject { put("text", "\n\n") })
+                        add(buildJsonObject {
+                            put("text", "$systemPrompt\n\n$text")
+                        })
                     })
                 })
             })
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
-            .url("/:generateContent?key=")
+            .url("$GEMINI_BASE_URL/$GEMINI_MODEL:generateContent?key=$apiKey")
             .post(body)
             .build()
 
         return executeRequest(request) { responseBody ->
-            Json.parseToJsonElement(responseBody)
-                .jsonObject["candidates"]
-                ?.let { arr -> arr.jsonArray[0] }
-                ?.jsonObject?.get("content")
-                ?.jsonObject?.get("parts")
-                ?.let { arr -> arr.jsonArray[0] }
-                ?.jsonObject?.get("text")
-                ?.jsonPrimitive?.content
-                ?: error("Unexpected Gemini response shape")
+            try {
+                Json.parseToJsonElement(responseBody)
+                    .jsonObject["candidates"]
+                    ?.jsonArray?.getOrNull(0)
+                    ?.jsonObject?.get("content")
+                    ?.jsonObject?.get("parts")
+                    ?.jsonArray?.getOrNull(0)
+                    ?.jsonObject?.get("text")
+                    ?.jsonPrimitive?.content?.trim()
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 
@@ -102,23 +112,28 @@ object AiClient {
      */
     private inline fun executeRequest(
         request: Request,
-        parseBody: (String) -> String,
+        parseBody: (String) -> String?,
     ): Result {
-        return runCatching {
+        return try {
             httpClient.newCall(request).execute().use { response ->
                 when (response.code) {
                     200 -> {
                         val raw = response.body?.string()
                             ?: return Result.Failure("Empty response body")
-                        Result.Success(parseBody(raw))
+                        val result = parseBody(raw)
+                        if (result != null) {
+                            Result.Success(result)
+                        } else {
+                            Result.Failure("Unexpected response shape")
+                        }
                     }
-                    401 -> Result.Failure("Invalid API key — check your key and try again")
-                    429 -> Result.RateLimited(
-                        "Free-tier quota reached — please try again later"
-                    )
-                    else -> Result.Failure("HTTP ${response.code} from Gemini")
+                    429 -> Result.RateLimited("Free-tier quota reached — please try again later")
+                    401, 403 -> Result.Failure("Invalid API key (HTTP ${response.code})")
+                    else -> Result.Failure("HTTP ${response.code}")
                 }
             }
-        }.getOrElse { Result.Failure(it.message ?: "Network error") }
+        } catch (e: Exception) {
+            Result.Failure(e.message ?: "Unknown network error")
+        }
     }
 }

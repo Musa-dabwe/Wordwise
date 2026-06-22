@@ -181,9 +181,7 @@ AiClient receives HTTP 429 (Rate Limit) or 401 (Auth)
 ## 9. KNOWN ISSUES, TODOS & TECH DEBT
 
 **Critical Tech Debt**
-- [ ] `app/src/main/kotlin/com/musa/wordwise/network/AiClient.kt:73` — **BUG:** `fixGrammarGemini` URL is relative (`/:generateContent`) and missing placeholders. It should be fully qualified.
-- [ ] `app/src/main/kotlin/com/musa/wordwise/network/AiClient.kt:66` — **STUB:** Body construction uses hardcoded `\n\n` and ignores the `GRAMMAR_SYSTEM_PROMPT`.
-- [ ] `app/src/main/kotlin/com/musa/wordwise/data/ApiKeyRepository.kt:10` — **DEPRECATED:** Uses `MasterKeys` API which is deprecated in favor of `MasterKey.Builder`.
+- [ ] `app/src/main/kotlin/com/musa/wordwise/data/ApiKeyRepository.kt:10` — **DEPRECATED:** Uses `MasterKeys` API. Note: Migration to `MasterKey.Builder` is blocked until `security-crypto` is upgraded to at least `1.1.0-alpha01`.
 
 **General Issues**
 - [ ] No "Undo" functionality after text replacement.
