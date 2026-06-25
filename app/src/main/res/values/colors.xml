@@ -1,28 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Backgrounds -->
-    <color name="ww_bg_main">#121212</color>
-    <color name="ww_bg_primary">#121212</color>
-    <color name="ww_bg_card">#1E1E1E</color>
-    <color name="ww_bg_surface">#1E1E1E</color>
-    <color name="ww_bg_inset">#252525</color>
+    <!-- Background -->
+    <color name="ww_background">#000000</color>
 
-    <!-- Accent -->
-    <color name="ww_accent">#9B8EC4</color>
-    <color name="ww_accent_button">#7C6FAF</color>
+    <!-- Surfaces -->
+    <color name="ww_surface">#111111</color>
+    <color name="ww_surface_inlay">#1A1A1A</color>
+
+    <!-- Borders -->
+    <color name="ww_border_card">#222222</color>
+    <color name="ww_border_default">#333333</color>
+
+    <!-- Primary accent -->
+    <color name="ww_primary">#7C4DFF</color>
+    <color name="ww_on_primary">#FFFFFF</color>
 
     <!-- Text -->
-    <color name="ww_text_primary">#FFFFFF</color>
-    <color name="ww_text_secondary">#9E9E9E</color>
-    <color name="ww_text_hint">#616161</color>
+    <color name="ww_text_primary">#E3E2E2</color>
+    <color name="ww_text_secondary">#888888</color>
+    <color name="ww_text_label">#CAC3D8</color>
 
     <!-- Status -->
-    <color name="ww_success">#4CAF50</color>
-    <color name="ww_error">#F44336</color>
-
-    <!-- Input -->
-    <color name="ww_input_bg">#2A2A2A</color>
-    <color name="ww_input_stroke">#3A3A3A</color>
-
-    <color name="ww_divider">#2A2A2A</color>
+    <color name="ww_success">#00E676</color>
+    <color name="ww_error">#FF1744</color>
 </resources>
