@@ -1,25 +1,25 @@
 <resources>
     <!-- Base application theme. -->
     <style name="Base.AppTheme" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="android:windowBackground">@color/ww_bg_primary</item>
+        <!-- Background and Window -->
+        <item name="android:windowBackground">@color/ww_background</item>
+        <item name="android:colorBackground">@color/ww_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:forceDarkAllowed">false</item>
 
-        <item name="colorPrimary">@color/ww_accent</item>
-        <item name="colorPrimaryVariant">@color/ww_accent_button</item>
-        <item name="colorOnPrimary">@color/ww_text_primary</item>
-        <item name="colorSurface">@color/ww_bg_surface</item>
+        <!-- Material 3 Color Overrides -->
+        <item name="colorPrimary">@color/ww_primary</item>
+        <item name="colorOnPrimary">@color/ww_on_primary</item>
+        <item name="colorSurface">@color/ww_surface</item>
         <item name="colorOnSurface">@color/ww_text_primary</item>
+        <item name="colorOutline">@color/ww_border_default</item>
+        <item name="colorSurfaceVariant">@color/ww_surface_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/ww_text_label</item>
 
+        <!-- Component Styles -->
         <item name="materialButtonStyle">@style/Widget.WordWise.Button</item>
     </style>
 
     <style name="AppTheme" parent="Base.AppTheme" />
-
-    <style name="Widget.WordWise.Button" parent="Widget.MaterialComponents.Button">
-        <item name="cornerRadius">10dp</item>
-        <item name="android:textSize">15sp</item>
-        <item name="android:letterSpacing">0</item>
-    </style>
 </resources>
