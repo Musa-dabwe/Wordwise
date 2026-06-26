@@ -35,6 +35,10 @@ class GrammarFixService : AccessibilityService() {
     private val shortcutRegex = Regex("""\?fix$""")
     private val LARGE_TEXT_THRESHOLD = 1000 // characters
     
+    private val SPINNER_FRAMES = arrayOf("◴", "◷", "◶", "◵")
+    private var spinnerRunnable: Runnable? = null
+    private var spinnerNode: AccessibilityNodeInfo? = null
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var pendingJob: Job? = null
@@ -93,7 +97,6 @@ class GrammarFixService : AccessibilityService() {
                 return
             }
 
-
             val apiKey = apiKeyRepository.getApiKey()
 
             if (apiKey.isEmpty()) {
@@ -105,7 +108,7 @@ class GrammarFixService : AccessibilityService() {
             Log.d("GrammarFix", "Shortcut '$shortcut' detected!")
             Log.d("GrammarFix", "Text to fix: ${textToFix.length} chars")
             
-            showToast("Fixing...")
+            startSpinner(textToFix, source)
 
             pendingJob?.cancel()
             pendingJob = serviceScope.launch {
@@ -114,31 +117,37 @@ class GrammarFixService : AccessibilityService() {
                         showToast(getString(R.string.warning_large_text))
                     }
 
-                    val stripped = replaceText(source, textToFix)
-                    if (!stripped) {
-                        return@launch
-                    }
+                    val model = MainActivity.getSelectedModel(this@GrammarFixService)
+                    val result = AiClient.fixGrammar(textToFix, apiKey, model)
 
-                    when (val result = AiClient.fixGrammar(textToFix, apiKey)) {
+                    stopSpinner()
+
+                    when (result) {
                         is AiClient.Result.Success -> {
                             if (result.text != textToFix) {
                                 replaceText(source, result.text)
                                 showToast(getString(R.string.toast_fixed))
                             } else {
+                                replaceText(source, textToFix)
                                 showToast(getString(R.string.error_unchanged), long = true)
                             }
                         }
                         is AiClient.Result.RateLimited -> {
+                            replaceText(source, textToFix)
                             showToast(result.message, long = true)
                         }
                         is AiClient.Result.Failure -> {
+                            replaceText(source, textToFix)
                             showToast("Correction failed: ${result.error}", long = true)
                         }
                     }
                 } catch (e: Exception) {
+                    stopSpinner()
+                    replaceText(source, textToFix)
                     Log.e("GrammarFix", "Error fixing grammar: ${e.message}", e)
                     showToast("Error: ${e.message}", long = true)
                 } finally {
+                    stopSpinner()
                     source.safeRecycle()
                 }
             }
@@ -185,5 +194,32 @@ class GrammarFixService : AccessibilityService() {
                 if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
             ).show()
         }
+    }
+
+    private fun startSpinner(baseText: String, node: AccessibilityNodeInfo) {
+        stopSpinner()
+
+        val nodeCopy = AccessibilityNodeInfo.obtain(node)
+        spinnerNode = nodeCopy
+        var frame = 0
+
+        val runnable = object : Runnable {
+            override fun run() {
+                spinnerNode?.let {
+                    replaceText(it, "$baseText ${SPINNER_FRAMES[frame % SPINNER_FRAMES.size]}")
+                    frame++
+                    mainHandler.postDelayed(this, 300)
+                }
+            }
+        }
+        spinnerRunnable = runnable
+        mainHandler.post(runnable)
+    }
+
+    private fun stopSpinner() {
+        spinnerRunnable?.let { mainHandler.removeCallbacks(it) }
+        spinnerRunnable = null
+        spinnerNode?.safeRecycle()
+        spinnerNode = null
     }
 }

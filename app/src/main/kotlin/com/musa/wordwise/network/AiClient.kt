@@ -25,7 +25,6 @@ object AiClient {
 
     // ── Google Gemini ─────────────────────────────────────────────────────────
     private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-    private const val GEMINI_MODEL    = "gemini-2.5-flash-lite"
 
     // ── Shared HTTP client ────────────────────────────────────────────────────
     private val httpClient = OkHttpClient.Builder()
@@ -50,9 +49,9 @@ object AiClient {
      * This function owns its own [withContext] switch. The call site in
      * GrammarFixService must NOT wrap this call in another withContext.
      */
-    suspend fun fixGrammar(text: String, apiKey: String): Result =
+    suspend fun fixGrammar(text: String, apiKey: String, model: String): Result =
         withContext(Dispatchers.IO) {
-            fixGrammarGemini(text, apiKey, GRAMMAR_SYSTEM_PROMPT)
+            fixGrammarGemini(text, apiKey, model, GRAMMAR_SYSTEM_PROMPT)
         }
 
     // ── Gemini implementation ─────────────────────────────────────────────────
@@ -60,6 +59,7 @@ object AiClient {
     private fun fixGrammarGemini(
         text: String,
         apiKey: String,
+        model: String,
         systemPrompt: String
     ): Result {
         val body = buildJsonObject {
@@ -76,7 +76,7 @@ object AiClient {
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
-            .url("$GEMINI_BASE_URL/$GEMINI_MODEL:generateContent?key=$apiKey")
+            .url("$GEMINI_BASE_URL/$model:generateContent?key=$apiKey")
             .post(body)
             .build()
 
