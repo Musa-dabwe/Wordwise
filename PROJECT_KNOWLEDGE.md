@@ -156,7 +156,7 @@ AiClient receives HTTP 429 (Rate Limit) or 401 (Auth)
 | kotlinx-serialization | 1.6.3 | JSON parsing | AiClient.kt | Tree-based parsing |
 | security-crypto | 1.0.0 | Encryption | ApiKeyRepository.kt | AES-256-GCM / SIV |
 | Material Components | 1.12.0 | UI Components | activity_main.xml | Material3 Theme |
-| Gemini API | gemini-2.5-flash-lite | AI Backend | AiClient.kt | Free tier (~1.5k req/day) |
+| Gemini API | user-selected (default gemini-3.1-flash-lite) | AI Backend | AiClient.kt | Free-tier Flash/Flash-Lite models only |
 
 ---
 
@@ -181,11 +181,12 @@ AiClient receives HTTP 429 (Rate Limit) or 401 (Auth)
 ## 9. KNOWN ISSUES, TODOS & TECH DEBT
 
 **Critical Tech Debt**
-- [ ] `app/src/main/kotlin/com/musa/wordwise/data/ApiKeyRepository.kt:10` — **DEPRECATED:** Uses `MasterKeys` API. Note: Migration to `MasterKey.Builder` is blocked until `security-crypto` is upgraded to at least `1.1.0-alpha01`.
+- [x] ~~`ApiKeyRepository.kt` — Uses deprecated `MasterKeys` API.~~ **Resolved 2026-07:** upgraded `security-crypto` to 1.1.0 and migrated to `MasterKey.Builder` (same default key alias, so existing data still decrypts). Note: Jetpack Security itself is deprecated as of 1.1.0; a future migration off `EncryptedSharedPreferences` may be needed.
+- [x] ~~Auto Backup restored `secret_keys` prefs to new devices where the Keystore master key doesn't exist, crashing on first read.~~ **Resolved 2026-07:** `secret_keys.xml` is excluded via `backup_rules.xml` + `data_extraction_rules.xml`, and `ApiKeyRepository` self-heals by wiping and recreating the store if decryption fails.
 
 **General Issues**
 - [ ] No "Undo" functionality after text replacement.
-- [ ] `GrammarFixService.kt:32` — [INFERRED] Large text threshold (1000 chars) is arbitrary and might need adjustment for the "lite" model.
+- [ ] `GrammarFixService.kt` — [INFERRED] Large text threshold (1000 chars) is arbitrary and might need adjustment for the "lite" model.
 - [ ] No support for multi-part text nodes (only reads `event.text` or `source.text`).
 
 ---
@@ -233,5 +234,5 @@ AiClient receives HTTP 429 (Rate Limit) or 401 (Auth)
 |------|---------|
 | ?fix | The primary trigger shortcut for grammar correction. |
 | ACTION_SET_TEXT | The accessibility action used to replace text in external apps. |
-| GEMINI_MODEL | Hardcoded to "gemini-2.5-flash-lite". |
+| GEMINI_MODEL | User-selected in MainActivity; defaults to "gemini-3.1-flash-lite". |
 | safeRecycle | Extension function to safely recycle AccessibilityNodeInfo objects. |
