@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import android.widget.ArrayAdapter
+import android.widget.Filter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.color.MaterialColors
@@ -54,9 +55,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupModelSelector() {
-        binding.modelSelector.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_list_item_1, GEMINI_MODELS)
-        )
+        binding.modelSelector.setAdapter(NoFilterAdapter(this, GEMINI_MODELS))
         binding.modelSelector.setText(getSelectedModel(this), false)
         binding.modelSelector.setOnItemClickListener { _, _, position, _ ->
             prefs(this).edit().putString(KEY_MODEL, GEMINI_MODELS[position]).apply()
@@ -64,9 +63,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupThemeSelector() {
-        binding.themeSelector.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_list_item_1, AppTheme.entries.map { it.label })
-        )
+        binding.themeSelector.setAdapter(NoFilterAdapter(this, AppTheme.entries.map { it.label }))
         binding.themeSelector.setText(AppTheme.forKey(getSelectedThemeKey(this)).label, false)
         binding.themeSelector.setOnItemClickListener { _, _, position, _ ->
             val theme = AppTheme.entries[position]
@@ -99,6 +96,28 @@ class MainActivity : AppCompatActivity() {
         binding.enableButton.setText(
             if (isEnabled) R.string.label_enabled else R.string.label_enable
         )
+    }
+
+    /**
+     * AutoCompleteTextView filters its list against the current text after a
+     * selection, which would leave the dropdown showing only the picked item.
+     * These are fixed-choice selectors, so filtering is disabled entirely.
+     */
+    private class NoFilterAdapter(context: Context, private val items: List<String>) :
+        ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, items) {
+
+        private val noFilter = object : Filter() {
+            override fun performFiltering(constraint: CharSequence?) =
+                FilterResults().apply {
+                    values = items
+                    count = items.size
+                }
+
+            override fun publishResults(constraint: CharSequence?, results: FilterResults?) =
+                notifyDataSetChanged()
+        }
+
+        override fun getFilter(): Filter = noFilter
     }
 
     enum class AppTheme(val key: String, val label: String, val styleRes: Int) {
