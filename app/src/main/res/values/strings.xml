@@ -1,80 +1,46 @@
 <resources>
     <string name="app_name">WordWise</string>
+    <string name="tagline">AI grammar correction, system-wide</string>
     <string name="accessibility_service_description">WordWise monitors your text input and fixes grammar when you use the ?fix command. Your text is processed privately using your own API key.</string>
 
-    <string name="app_subtitle">System-wide grammar correction</string>
-    <string name="section_accessibility">2. Enable Accessibility Service</string>
-    <string name="section_accessibility_helper">Required to detect shortcuts in any app</string>
-    <string name="section_commands">3. Commands</string>
-    <string name="status_enabled">Status: Enabled</string>
-    <string name="status_disabled">Status: Disabled</string>
-    <string name="save_api_key">Save API Key</string>
-    <string name="open_accessibility_settings">Open Accessibility Settings</string>
-
-    <string name="api_key_hint">Paste your Gemini API key here</string>
-    <string name="commands_description">Type ?fix at the end of your text in any app:</string>
-    <string name="shortcut_fix_label">\?fix</string>
-    <string name="shortcut_fix_desc"> \u2014 Fix Text</string>
-    <string name="shortcut_fix_example_before">Before: i dont no how to spel\?fix</string>
-    <string name="shortcut_fix_example_after">After: I don\'t know how to spell.</string>
-    <string name="tips_multilingual">Works in any language \u2014 Swahili, French, Arabic, and more</string>
-    <string name="tips_structure">Sentence and paragraph structure is always preserved</string>
-    <string name="tips_speed">Wait 2\u20133 seconds for correction</string>
-    <string name="tips_header">Tips</string>
-
-    <string name="toast_api_key_saved">API Key saved securely</string>
-    <string name="toast_invalid_api_key">Invalid API key format. Get your key from aistudio.google.com</string>
-    <string name="toast_api_key_empty">API Key cannot be empty</string>
-    <string name="toast_accessibility_hint">Find and enable WordWise in the list</string>
-    <string name="toggle_key_visibility">Toggle API key visibility</string>
-    <string name="key_saved_indicator">✓ Key saved and encrypted on device</string>
-    <string name="key_empty_error">Please enter a valid API key</string>
-
-    <!-- Rate limit and error messages -->
-    <string name="error_rate_limited">API quota reached. WordWise works best for short texts under 500 characters.\n\nCheck your usage at aistudio.google.com</string>
-    <string name="error_rate_limited_with_retry">API quota reached \u2014 try again in %1 seconds.\n\nFor frequent use, check your quota at aistudio.google.com</string>
-    <string name="error_auth">API key rejected (error %1). Please check your key in WordWise settings.</string>
-    <string name="error_network">Could not reach Gemini (%1). Shortcut removed, text unchanged.</string>
-    <string name="error_unchanged">No corrections needed \u2014 text looks good.</string>
-
-    <!-- Large text pre-flight warning -->
-    <string name="warning_large_text">Large text detected \u2014 this may use significant API quota. Fixing anyway...</string>
-
-    <!-- Info card in Commands section -->
-    <string name="info_best_suited_title">Best suited for</string>
-    <string name="info_best_suited_body">Short messages, sentences, and paragraphs. For long documents, break text into sections and fix each one separately.</string>
-    <string name="info_quota_note">Free tier: ~1,500 requests/day. Check usage at aistudio.google.com</string>
-    <string name="toast_fixed">✓ Fixed!</string>
-
-    <!-- Gemini Integration -->
-    <string name="label_api_key">API Key</string>
-    <string name="hint_api_key_gemini">AIza...</string>
-    <string name="link_get_key_prefix">Get a free key at </string>
-    <string name="gemini_api_url">https://aistudio.google.com</string>
-
-    <!-- Model selector -->
-    <string name="model_selector_label">Gemini Model</string>
-    <string name="model_gemini_25_flash_lite">gemini-2.5-flash-lite</string>
-    <string name="model_gemini_3_flash">gemini-3-flash</string>
-    <string name="model_gemini_31_flash_lite">gemini-3.1-flash-lite</string>
-    <string name="model_selector_hint">Select model</string>
-
-    <!-- How to use sections -->
-    <string name="label_how_to_use">HOW TO USE</string>
-    <string name="step_1_title">1</string>
-    <string name="step_1_desc">Type your text in any application (WhatsApp, Gmail, etc.)</string>
-    <string name="step_2_title">2</string>
-    <string name="step_2_desc">Add ?fix at the end of your sentence or paragraph</string>
-    <string name="step_3_desc">Wait 2-3 seconds for WordWise to automatically replace ?fix with corrected text</string>
-    <string name="step_3_title">3</string>
-
-    <!-- Section Labels -->
-    <string name="label_gemini_api_key">GEMINI API KEY</string>
+    <!-- Service status -->
     <string name="label_service_active">SERVICE ACTIVE</string>
     <string name="label_service_inactive">SERVICE INACTIVE</string>
     <string name="label_enable">Enable</string>
     <string name="label_enabled">Enabled ✓</string>
+    <string name="toast_accessibility_hint">Find and enable WordWise in the list</string>
+
+    <!-- API key -->
+    <string name="label_gemini_api_key">GEMINI API KEY</string>
+    <string name="api_key_hint">Paste your API key here</string>
+    <string name="label_ai_studio_link">Get a free key at Google AI Studio →</string>
+    <string name="gemini_api_url">https://aistudio.google.com</string>
     <string name="label_save_key">SAVE KEY</string>
-    <string name="label_ai_studio_link">Get a free key at Google AI Studio \u2192</string>
-    <string name="tagline">AI grammar correction, system-wide</string>
+    <string name="toast_api_key_saved">API key saved securely</string>
+    <string name="toast_api_key_empty">API key cannot be empty</string>
+    <string name="toast_api_key_missing">Add your Gemini API key in WordWise first</string>
+
+    <!-- Selectors -->
+    <string name="model_selector_label">MODEL</string>
+    <string name="model_selector_hint">Select model</string>
+    <string name="theme_selector_label">THEME</string>
+    <string name="theme_selector_hint">Select theme</string>
+
+    <!-- How to use -->
+    <string name="label_how_to_use">HOW TO USE</string>
+    <string name="step_1_number">1</string>
+    <string name="step_2_number">2</string>
+    <string name="step_3_number">3</string>
+    <string name="step_1_desc">Type your text in any app (WhatsApp, Gmail, etc.)</string>
+    <string name="step_2_desc">Add ?fix at the end of your sentence or paragraph</string>
+    <string name="step_3_desc">Wait a moment — WordWise replaces it with the corrected text</string>
+
+    <!-- Service messages -->
+    <string name="toast_service_ready">WordWise is ready! Type ?fix at the end of your text.</string>
+    <string name="toast_fixed">✓ Fixed!</string>
+    <string name="toast_no_text">No text found to fix</string>
+    <string name="error_unchanged">No corrections needed — text looks good</string>
+    <string name="error_correction_failed">Correction failed: %1$s</string>
+    <string name="error_replace_failed">Could not replace text in this field. Try a standard text input field.</string>
+    <string name="warning_large_text">Large text detected — this may use more of your free quota</string>
 </resources>

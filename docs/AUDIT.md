@@ -58,11 +58,24 @@ All dead code findings (DC-01 through DC-09) identified during the audit were re
 
 ## Items Deferred to Future Work
 
-| ID | File | Issue | Reason |
+| ID | File | Issue | Status |
 |---|---|---|---|
-| DC-06 | themes.xml | `tools` namespace declared but unused | Low risk; may cause IDE lint noise if removed |
-| DC-07 | AndroidManifest.xml | `roundIcon` duplicates `icon` | Convention for round icon support |
-| DC-08 | ApiKeyRepository.kt | `MasterKeys.getOrCreate()` deprecated | Functional but should be migrated to `MasterKey.Builder` |
+| DC-06 | themes.xml | `tools` namespace declared but unused | Resolved 2026-07 — themes.xml rewritten for the six-theme system |
+| DC-07 | AndroidManifest.xml | `roundIcon` duplicates `icon` | Kept — convention for round icon support |
+| DC-08 | ApiKeyRepository.kt | `MasterKeys.getOrCreate()` deprecated | Resolved 2026-07 — migrated to `MasterKey.Builder` on security-crypto 1.1.0 |
+
+### 2026-07 follow-up sweep
+
+Additional dead code removed in the July 2026 audit/redesign pass:
+
+| File | Issue | Disposition |
+|---|---|---|
+| values/styles.xml | Unused `ShapeAppearanceOverlay.WordWise.Input` | Removed (file deleted) |
+| values-night/* | Empty colors.xml, duplicate themes.xml | Removed — theming is now explicit per user choice |
+| drawable/edit_text_background.xml | Unreferenced | Removed |
+| drawable*/ic_launcher.png, ic_launcher_background.xml | Unreferenced (manifest uses @mipmap) | Removed |
+| activity_main.xml | Used ConstraintLayout although DC-03 removed the dependency (worked only transitively) | Rewritten as LinearLayout |
+| strings.xml | ~25 orphaned strings, two with broken `%1` format placeholders | Pruned/fixed |
 
 ---
 

@@ -11,7 +11,7 @@ WordWise is a system-wide accessibility-based utility that provides grammar corr
 | Component | File | Description |
 |---|---|---|
 | **GrammarFixService** | `GrammarFixService.kt` | The core AccessibilityService. Listens for `TYPE_VIEW_TEXT_CHANGED` events, matches `?fix` suffix via `Regex("\\?fix$")`, dispatches correction requests to AiClient, and replaces text on the UI node via `ACTION_SET_TEXT`. Runs on `Dispatchers.Main` with a `SupervisorJob` scope. |
-| **AiClient** | `AiClient.kt` | Singleton managing a shared `OkHttpClient` (4.12.0) and the Google Gemini backend (`gemini-2.5-flash-lite`). Exposes `suspend fun fixGrammar(text: String, apiKey: String): Result` which switches to `Dispatchers.IO` internally. The `Result` sealed class has three variants: `Success`, `RateLimited`, `Failure`. |
+| **AiClient** | `AiClient.kt` | Singleton managing a shared `OkHttpClient` (4.12.0) and the Google Gemini backend (user-selected model, default `gemini-3.1-flash-lite`). Exposes `suspend fun fixGrammar(text: String, apiKey: String, model: String): Result` which switches to `Dispatchers.IO` internally and authenticates via the `x-goog-api-key` header. The `Result` sealed class has three variants: `Success`, `RateLimited`, `Failure`. |
 | **ApiKeyRepository** | `ApiKeyRepository.kt` | Secure storage for a single Gemini API key using `EncryptedSharedPreferences` (AES-256-SIV for key encryption, AES-256-GCM for value encryption). Reads and writes the key under `api_key_gemini` in a preferences file named `secret_keys`. |
 | **MainActivity** | `MainActivity.kt` | Launcher activity with ViewBinding. Provides the API key text input, a clickable link to Google AI Studio, a Save button backed by `ApiKeyRepository`, and a live accessibility service status indicator (Enabled/Disabled) updated in `onResume`. |
 
@@ -27,7 +27,7 @@ graph TD
         MA[MainActivity] -- saves key --> AKR
     end
 
-    AIC -- TLS · ?key= param --> Gemini[Gemini API]
+    AIC -- TLS · x-goog-api-key header --> Gemini[Gemini API]
     Gemini -- Correction --> AIC
     AIC -- Result.Success / Failure / RateLimited --> GFS
     GFS -- ACTION_SET_TEXT --> Field((Input Field))
@@ -36,7 +36,7 @@ graph TD
 ## Key Design Decisions
 
 - **Accessibility vs. IME**: WordWise uses an AccessibilityService instead of a custom Input Method Editor (IME) to remain keyboard-agnostic. Users can keep using Gboard, SwiftKey, or any other keyboard.
-- **Gemini only**: Google Gemini (`gemini-2.5-flash-lite`) is the sole AI provider. The free tier supports approximately 1,500 requests/day.
+- **Gemini only**: Google Gemini is the sole AI provider. The model is user-selectable from the free-tier Flash/Flash-Lite families (default `gemini-3.1-flash-lite`).
 - **Strict prompt**: The system uses the instruction: "Return only the corrected text. Preserve the original language and meaning exactly. Do not add any explanations, commentary, or quotation marks."
 - **OkHttp Singleton**: A shared `OkHttpClient` is used in `AiClient` to take advantage of connection pooling and keep the app's memory footprint low. Timeouts: connect 30s, read 60s, write 30s.
 - **No Local DB**: To minimize complexity and security surface area, WordWise uses only `EncryptedSharedPreferences`. No SQLite/Room database is present.

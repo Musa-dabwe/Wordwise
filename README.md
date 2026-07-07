@@ -7,7 +7,7 @@ System-wide grammar correction for Android. Type `?fix` at the end of any text i
 WordWise registers as an **Android Accessibility Service** and listens for `TYPE_VIEW_TEXT_CHANGED` events across all running applications. When you type `?fix` at the end of text in any input field, the service:
 
 1. Strips the shortcut suffix and reads the surrounding text from the accessibility node.
-2. Sends the text to **Google Gemini** (`gemini-2.5-flash-lite`) with a strict correction prompt.
+2. Sends the text to **Google Gemini** (your selected model, default `gemini-3.1-flash-lite`) with a strict correction prompt.
 3. Replaces the field content in-place via `ACTION_SET_TEXT` — no copy/paste required.
 
 The service skips password fields (`TYPE_TEXT_VARIATION_PASSWORD`, `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD`, `TYPE_TEXT_VARIATION_WEB_PASSWORD`, `TYPE_NUMBER_VARIATION_PASSWORD`) for security.
@@ -56,14 +56,31 @@ I don't know how to spell.
 - If the input exceeds **1,000 characters**, a toast warning is shown (the request proceeds regardless).
 - If the API returns the same text unchanged, a "No corrections needed" message appears.
 - If the free-tier **rate limit (HTTP 429)** is hit, a message is shown asking the user to try again later.
-- The Gemini free tier allows approximately **1,500 requests/day**.
+
+### Models
+
+WordWise only lists models available on the Gemini API **free tier** (Flash / Flash-Lite families). Pick one in the app:
+
+| Model | Notes |
+|---|---|
+| `gemini-3.1-flash-lite` | Default — fast, frontier-class quality, generous free limits |
+| `gemini-3.5-flash` | Most capable free model |
+| `gemini-2.5-flash-lite` | Fastest and most budget-friendly of the 2.5 family |
+| `gemini-2.5-flash` | 2.5 workhorse (WordWise disables its thinking budget for speed) |
+
+Free-tier limits vary per model (roughly 10–15 requests/minute and 1,000–1,500 requests/day); check your live quota at [aistudio.google.com](https://aistudio.google.com/rate-limit).
+
+### Themes
+
+Six built-in themes, selectable in the app: **GitHub Dark**, **GitHub Light**, **VS Code Dark**, **VS Code Light**, **Claude Dark**, and **Claude Light**. The choice is stored in preferences and applied instantly.
 
 ## Security & Privacy
 
 | Concern | Implementation |
 |---|---|
-| **API key storage** | `EncryptedSharedPreferences` with `MasterKeys.AES256_GCM_SPEC`. Key encryption uses AES-256-SIV; value encryption uses AES-256-GCM. |
-| **Key in transit** | Transmitted as a URL query parameter (`?key=`) to `generativelanguage.googleapis.com` over TLS 1.3. |
+| **API key storage** | `EncryptedSharedPreferences` with a `MasterKey.Builder` AES-256-GCM master key. Key encryption uses AES-256-SIV; value encryption uses AES-256-GCM. |
+| **Key in transit** | Sent via the `x-goog-api-key` request header (never in the URL, so it cannot leak into request logs) to `generativelanguage.googleapis.com` over TLS 1.3. |
+| **Backups** | The encrypted key store is excluded from Auto Backup and device-to-device transfer (`backup_rules.xml` / `data_extraction_rules.xml`) — its master key lives in the device Keystore and cannot travel with a backup. |
 | **Network policy** | `android:networkSecurityConfig` explicitly blocks cleartext traffic — only TLS connections are permitted. System certificate store is used for trust anchors. |
 | **Data retention** | WordWise does not log, cache, or store any text sent for correction. Text is held in memory only for the duration of the network request and discarded immediately after. |
 | **Sensitive fields** | Password, visible-password, and web-password input types are programmatically skipped — the service never reads their content. |
@@ -91,8 +108,9 @@ WordWise follows a minimal **Activity + Service** pattern (not MVVM — there ar
 └──────────────────────┘    │  - kotlinx-serialization JSON │
                             └──────────────────────────────┘
                                     │ POST /v1beta/models/
-                                    │ gemini-2.5-flash-lite
-                                    │ :generateContent?key=
+                                    │ {selected-model}
+                                    │ :generateContent
+                                    │ (x-goog-api-key header)
                                     ▼
                          Google Gemini API
 ```
@@ -137,7 +155,7 @@ Because the prompt instructs the model to preserve the original language, WordWi
 ```
 androidx.core:core-ktx:1.12.0
 com.squareup.okhttp3:okhttp:4.12.0
-androidx.security:security-crypto:1.0.0
+androidx.security:security-crypto:1.1.0
 org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
 org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3
 com.google.android.material:material:1.12.0
@@ -162,7 +180,7 @@ androidx.appcompat:appcompat:1.7.1
 - **Networking**: OkHttp 4.12.0
 - **Serialization**: kotlinx-serialization-json 1.6.3
 - **Coroutines**: kotlinx-coroutines-android 1.7.3
-- **UI**: ViewBinding, Material 3 (Dark theme, `Theme.Material3.Dark.NoActionBar`)
+- **UI**: ViewBinding, Material 3, six selectable themes (GitHub / VS Code / Claude, light + dark)
 - **Secure storage**: EncryptedSharedPreferences (AES-256-GCM + AES-256-SIV)
 - **Architecture**: Activity + Service (not MVVM)
 - **ProGuard**: Minification enabled for release builds

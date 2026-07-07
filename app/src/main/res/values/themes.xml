@@ -1,40 +1,156 @@
 <resources>
-    <!-- Base application theme. -->
-    <style name="Base.AppTheme" parent="Theme.Material3.Dark.NoActionBar">
-        <!-- Background and Window -->
-        <item name="android:windowBackground">@color/ww_background</item>
-        <item name="android:colorBackground">@color/ww_background</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:forceDarkAllowed">false</item>
-
-        <!-- Material 3 Color Overrides -->
-        <item name="colorPrimary">@color/ww_primary</item>
-        <item name="colorOnPrimary">@color/ww_on_primary</item>
-        <item name="colorSurface">@color/ww_surface</item>
-        <item name="colorOnSurface">@color/ww_text_primary</item>
-        <item name="colorOutline">@color/ww_border_default</item>
-        <item name="colorSurfaceVariant">@color/ww_surface_inlay</item>
-        <item name="colorOnSurfaceVariant">@color/ww_text_label</item>
-
-        <!-- Component Styles -->
-        <item name="materialButtonStyle">@style/Widget.WordWise.Button</item>
-    </style>
-
-    <style name="AppTheme" parent="Base.AppTheme" />
-
+    <!-- ── Shared component styles ─────────────────────────────────── -->
     <style name="Widget.WordWise.Button" parent="Widget.Material3.Button">
         <item name="cornerRadius">12dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:letterSpacing">0.1</item>
+        <item name="android:letterSpacing">0.05</item>
     </style>
 
     <style name="Widget.WordWise.Card" parent="Widget.Material3.CardView.Elevated">
-        <item name="cardBackgroundColor">@color/ww_surface</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
         <item name="cardCornerRadius">16dp</item>
         <item name="cardElevation">0dp</item>
-        <item name="strokeColor">@color/ww_border_card</item>
+        <item name="strokeColor">?attr/colorOutline</item>
         <item name="strokeWidth">1dp</item>
     </style>
+
+    <style name="Widget.WordWise.SectionLabel" parent="">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.1</item>
+    </style>
+
+    <!-- ── Base themes ─────────────────────────────────────────────── -->
+    <style name="Base.Theme.WordWise.Dark" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="materialButtonStyle">@style/Widget.WordWise.Button</item>
+    </style>
+
+    <style name="Base.Theme.WordWise.Light" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="materialButtonStyle">@style/Widget.WordWise.Button</item>
+    </style>
+
+    <!-- ── GitHub Dark ─────────────────────────────────────────────── -->
+    <style name="Theme.WordWise.GithubDark" parent="Base.Theme.WordWise.Dark">
+        <item name="android:colorBackground">@color/gh_dark_bg</item>
+        <item name="android:windowBackground">@color/gh_dark_bg</item>
+        <item name="colorPrimary">@color/gh_dark_primary</item>
+        <item name="colorOnPrimary">@color/gh_dark_on_primary</item>
+        <item name="colorSurface">@color/gh_dark_surface</item>
+        <item name="colorOnSurface">@color/gh_dark_text</item>
+        <item name="colorOnBackground">@color/gh_dark_text</item>
+        <item name="colorSurfaceVariant">@color/gh_dark_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/gh_dark_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/gh_dark_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/gh_dark_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/gh_dark_inlay</item>
+        <item name="colorOutline">@color/gh_dark_border</item>
+        <item name="colorError">@color/gh_dark_error</item>
+        <item name="wwSuccess">@color/gh_dark_success</item>
+    </style>
+
+    <!-- ── GitHub Light ────────────────────────────────────────────── -->
+    <style name="Theme.WordWise.GithubLight" parent="Base.Theme.WordWise.Light">
+        <item name="android:colorBackground">@color/gh_light_bg</item>
+        <item name="android:windowBackground">@color/gh_light_bg</item>
+        <item name="colorPrimary">@color/gh_light_primary</item>
+        <item name="colorOnPrimary">@color/gh_light_on_primary</item>
+        <item name="colorSurface">@color/gh_light_surface</item>
+        <item name="colorOnSurface">@color/gh_light_text</item>
+        <item name="colorOnBackground">@color/gh_light_text</item>
+        <item name="colorSurfaceVariant">@color/gh_light_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/gh_light_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/gh_light_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/gh_light_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/gh_light_inlay</item>
+        <item name="colorOutline">@color/gh_light_border</item>
+        <item name="colorError">@color/gh_light_error</item>
+        <item name="wwSuccess">@color/gh_light_success</item>
+    </style>
+
+    <!-- ── VS Code Dark ────────────────────────────────────────────── -->
+    <style name="Theme.WordWise.VscodeDark" parent="Base.Theme.WordWise.Dark">
+        <item name="android:colorBackground">@color/vs_dark_bg</item>
+        <item name="android:windowBackground">@color/vs_dark_bg</item>
+        <item name="colorPrimary">@color/vs_dark_primary</item>
+        <item name="colorOnPrimary">@color/vs_dark_on_primary</item>
+        <item name="colorSurface">@color/vs_dark_surface</item>
+        <item name="colorOnSurface">@color/vs_dark_text</item>
+        <item name="colorOnBackground">@color/vs_dark_text</item>
+        <item name="colorSurfaceVariant">@color/vs_dark_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/vs_dark_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/vs_dark_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/vs_dark_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/vs_dark_inlay</item>
+        <item name="colorOutline">@color/vs_dark_border</item>
+        <item name="colorError">@color/vs_dark_error</item>
+        <item name="wwSuccess">@color/vs_dark_success</item>
+    </style>
+
+    <!-- ── VS Code Light ───────────────────────────────────────────── -->
+    <style name="Theme.WordWise.VscodeLight" parent="Base.Theme.WordWise.Light">
+        <item name="android:colorBackground">@color/vs_light_bg</item>
+        <item name="android:windowBackground">@color/vs_light_bg</item>
+        <item name="colorPrimary">@color/vs_light_primary</item>
+        <item name="colorOnPrimary">@color/vs_light_on_primary</item>
+        <item name="colorSurface">@color/vs_light_surface</item>
+        <item name="colorOnSurface">@color/vs_light_text</item>
+        <item name="colorOnBackground">@color/vs_light_text</item>
+        <item name="colorSurfaceVariant">@color/vs_light_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/vs_light_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/vs_light_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/vs_light_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/vs_light_inlay</item>
+        <item name="colorOutline">@color/vs_light_border</item>
+        <item name="colorError">@color/vs_light_error</item>
+        <item name="wwSuccess">@color/vs_light_success</item>
+    </style>
+
+    <!-- ── Claude Dark ─────────────────────────────────────────────── -->
+    <style name="Theme.WordWise.ClaudeDark" parent="Base.Theme.WordWise.Dark">
+        <item name="android:colorBackground">@color/cl_dark_bg</item>
+        <item name="android:windowBackground">@color/cl_dark_bg</item>
+        <item name="colorPrimary">@color/cl_dark_primary</item>
+        <item name="colorOnPrimary">@color/cl_dark_on_primary</item>
+        <item name="colorSurface">@color/cl_dark_surface</item>
+        <item name="colorOnSurface">@color/cl_dark_text</item>
+        <item name="colorOnBackground">@color/cl_dark_text</item>
+        <item name="colorSurfaceVariant">@color/cl_dark_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/cl_dark_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/cl_dark_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/cl_dark_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/cl_dark_inlay</item>
+        <item name="colorOutline">@color/cl_dark_border</item>
+        <item name="colorError">@color/cl_dark_error</item>
+        <item name="wwSuccess">@color/cl_dark_success</item>
+    </style>
+
+    <!-- ── Claude Light ────────────────────────────────────────────── -->
+    <style name="Theme.WordWise.ClaudeLight" parent="Base.Theme.WordWise.Light">
+        <item name="android:colorBackground">@color/cl_light_bg</item>
+        <item name="android:windowBackground">@color/cl_light_bg</item>
+        <item name="colorPrimary">@color/cl_light_primary</item>
+        <item name="colorOnPrimary">@color/cl_light_on_primary</item>
+        <item name="colorSurface">@color/cl_light_surface</item>
+        <item name="colorOnSurface">@color/cl_light_text</item>
+        <item name="colorOnBackground">@color/cl_light_text</item>
+        <item name="colorSurfaceVariant">@color/cl_light_inlay</item>
+        <item name="colorOnSurfaceVariant">@color/cl_light_text_secondary</item>
+        <item name="colorSurfaceContainer">@color/cl_light_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/cl_light_inlay</item>
+        <item name="colorSurfaceContainerHighest">@color/cl_light_inlay</item>
+        <item name="colorOutline">@color/cl_light_border</item>
+        <item name="colorError">@color/cl_light_error</item>
+        <item name="wwSuccess">@color/cl_light_success</item>
+    </style>
+
+    <!-- Manifest default; MainActivity applies the user's saved theme in onCreate. -->
+    <style name="AppTheme" parent="Theme.WordWise.GithubDark" />
 </resources>
