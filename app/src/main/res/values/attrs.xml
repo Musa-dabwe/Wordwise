@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Success/active accent — Material 3 has no success role, so WordWise defines one. -->
-    <attr name="wwSuccess" format="color" />
-</resources>

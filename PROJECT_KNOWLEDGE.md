@@ -46,7 +46,7 @@ WordWise is a system-wide accessibility-based utility for Android that provides 
 ## 3. ARCHITECTURE & DESIGN PATTERNS
 - **Overall Pattern:** Minimalist Activity + Service architecture. Does not use MVVM/ViewModel to keep the memory footprint low for a persistent background service.
 - **Layer Breakdown:**
-    - **UI Layer:** `MainActivity` handles user configuration and status monitoring via ViewBinding.
+    - **UI Layer:** htmx web frontend (Poet pastel design system) served by an embedded Ktor CIO server (`server/WwServer.kt`, `127.0.0.1:8977`) into a fullscreen WebView hosted by `MainActivity`. `WordWiseApp` starts the server at process launch. See `docs/FRONTEND_MIGRATION.md`.
     - **Service Layer:** `GrammarFixService` acts as the system-wide orchestrator, monitoring accessibility events.
     - **Network Layer:** `AiClient` encapsulates Gemini API logic using a shared OkHttp singleton.
     - **Data Layer:** `ApiKeyRepository` manages persistent secure storage.
@@ -106,16 +106,25 @@ WordWise is a system-wide accessibility-based utility for Android that provides 
 
 **MainActivity**
 - **Path:** `app/src/main/kotlin/com/musa/wordwise/MainActivity.kt`
-- **Role:** Entry point for users to configure the app and check status.
-- **Key methods:**
-    - `checkAccessibilityStatus`: Updates the UI to show if the service is running.
-    - `setupApiKeySection`: Pre-fills UI and sets up the Google AI Studio hyperlink.
-    - `setupSaveButton`: Saves the key and shows confirmation toast.
-- **Inputs:** User interaction (Button clicks, Text input).
-- **Outputs:** Updates to `ApiKeyRepository` and system Accessibility settings intent.
-- **Dependencies:** `ApiKeyRepository`, ViewBinding.
-- **State it owns:** None (Stateless Activity, state is in the repository).
-- **Gotchas:** Relies on `onResume` to update status, which may not trigger if settings change in split-screen mode on some Android versions.
+- **Role:** Fullscreen WebView container for the htmx frontend.
+- **Key behaviour:**
+    - Waits for the embedded server port, then loads `http://127.0.0.1:8977/`.
+    - Serves `/assets/*` straight from the APK via `shouldInterceptRequest`.
+    - Opens non-localhost links (AI Studio) in the external browser.
+    - `WwNative.setStatusBarColor` JS bridge keeps the status bar on the accent color.
+    - Hardware back → `wwBack()` in JS (settings → home → background).
+- **Dependencies:** `WwServer`, `Prefs`.
+- **Gotchas:** Service status is polled every 2s by the frontend (`GET /api/status`), so no `onResume` refresh is needed.
+
+**WwServer / Shell / Views**
+- **Path:** `app/src/main/kotlin/com/musa/wordwise/server/`
+- **Role:** Embedded Ktor CIO server on `127.0.0.1:8977` serving the Poet pastel design system (Shell CSS/JS + htmx), server-rendered Home/Settings screens, live status JSON, and the key/model/accent/tint API.
+- **State it owns:** `accessibilitySettingsRequester` (set by MainActivity to fire the system settings intent).
+- **Gotchas:** Port is 8977 (not 8080) so WordWise and PoetMusic can coexist on one device. Cleartext HTTP is allowed only for `127.0.0.1` in `network_security_config.xml`.
+
+**Prefs**
+- **Path:** `app/src/main/kotlin/com/musa/wordwise/data/Prefs.kt`
+- **Role:** Plain SharedPreferences (`wordwise_prefs`) for the selected Gemini model, accent color, and canvas tint. `GrammarFixService` reads the model from here.
 
 ---
 
@@ -221,6 +230,7 @@ AiClient receives HTTP 429 (Rate Limit) or 401 (Auth)
 ---
 
 ## 13. RECENT CHANGES & EVOLUTION
+- **Frontend Migration (2026-07):** Replaced the XML/ViewBinding UI with an htmx + embedded-Ktor frontend using the PoetMusic pastel design system (4 accents × 3 canvas tints, Outfit font). minSdk raised 23 → 26. See `docs/FRONTEND_MIGRATION.md`.
 - **Gemini Migration:** Recently moved from `gemini-2.5-flash` to `gemini-2.5-flash-lite` for cost/speed efficiency.
 - **Security Hardening:** Completed a full security audit; 5 critical bugs related to key leakage and sensitive field handling were fixed.
 - **UI Refresh:** Redesigned using Google Stitch to align with Material3 guidelines.

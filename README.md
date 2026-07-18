@@ -72,7 +72,12 @@ Free-tier limits vary per model (roughly 10–15 requests/minute and 1,000–1,5
 
 ### Themes
 
-Six built-in themes, selectable in the app: **GitHub Dark**, **GitHub Light**, **VS Code Dark**, **VS Code Light**, **Claude Dark**, and **Claude Light**. The choice is stored in preferences and applied instantly.
+WordWise uses the Poet pastel design system (shared with PoetMusic). In **Settings** you can pick:
+
+- **Accent color** — four pastel swatches: lavender, mint, peach, and sky.
+- **Canvas tint** — three background tints: **Lavender**, **Cream**, and **Sage**.
+
+Both apply instantly via CSS variables (no restart) and are persisted in preferences. The Android status bar follows the chosen accent.
 
 ## Security & Privacy
 
@@ -88,6 +93,8 @@ Six built-in themes, selectable in the app: **GitHub Dark**, **GitHub Light**, *
 ## Architecture
 
 WordWise follows a minimal **Activity + Service** pattern (not MVVM — there are no `ViewModel` or `LiveData`/`StateFlow` classes).
+
+The configuration UI is an **htmx web frontend** served by an **embedded Ktor server** (`127.0.0.1:8977`, CIO engine) into a fullscreen WebView — the same architecture and pastel design system as PoetMusic. See `docs/FRONTEND_MIGRATION.md` for the full map.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -122,7 +129,11 @@ WordWise follows a minimal **Activity + Service** pattern (not MVVM — there ar
 | `GrammarFixService` | `GrammarFixService.kt` | Core `AccessibilityService`. Listens for text-change events, detects `?fix`, orchestrates correction via coroutines (`CoroutineScope(Dispatchers.Main + SupervisorJob)`), and replaces text on the UI node. |
 | `AiClient` | `AiClient.kt` | Singleton wrapping an `OkHttpClient`. Exposes `suspend fun fixGrammar(text, apiKey): Result` (dispatches to `Dispatchers.IO`). The `Result` sealed class has three variants: `Success`, `RateLimited`, `Failure`. Only the Gemini backend is implemented. |
 | `ApiKeyRepository` | `ApiKeyRepository.kt` | Reads and writes the Gemini API key via `EncryptedSharedPreferences`. Single key (`api_key_gemini`) stored in a preferences file named `secret_keys`. |
-| `MainActivity` | `MainActivity.kt` | Launcher activity. Provides the API key input field, a clickable link to AI Studio, a Save button, and the accessibility service status indicator. Uses `ViewBinding` (`ActivityMainBinding`). |
+| `MainActivity` | `MainActivity.kt` | Launcher activity. Fullscreen WebView hosting the htmx frontend; opens external links in the browser, drives the status-bar color from the accent, and forwards the hardware back button to `wwBack()` in JS. |
+| `WordWiseApp` | `WordWiseApp.kt` | `Application` subclass; starts the embedded Ktor server before the WebView exists. |
+| `WwServer` | `server/WwServer.kt` | Embedded Ktor (CIO) server on `127.0.0.1:8977`. Serves the shell, screens, assets, live status JSON, and the key/model/theming API. |
+| `Shell` / `Views` | `server/Shell.kt`, `server/Views.kt` | Poet design-system CSS/JS shell (Outfit font, pastel accents, canvas tints, toasts) and the server-rendered Home/Settings screens. |
+| `Prefs` | `data/Prefs.kt` | Plain SharedPreferences for the selected model, accent, and canvas tint. |
 
 ### Prompt
 
@@ -154,13 +165,17 @@ Because the prompt instructs the model to preserve the original language, WordWi
 
 ```
 androidx.core:core-ktx:1.12.0
+androidx.appcompat:appcompat:1.7.1
 com.squareup.okhttp3:okhttp:4.12.0
 androidx.security:security-crypto:1.1.0
 org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
 org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3
-com.google.android.material:material:1.12.0
-androidx.appcompat:appcompat:1.7.1
+io.ktor:ktor-server-core:2.3.13
+io.ktor:ktor-server-cio:2.3.13
+org.slf4j:slf4j-nop:2.0.13
 ```
+
+Bundled web assets: `htmx.min.js`, `outfit-latin.woff2`, `outfit-latin-ext.woff2`.
 
 ## Limitations
 
@@ -176,11 +191,11 @@ androidx.appcompat:appcompat:1.7.1
 - **Language**: Kotlin 2.0.21
 - **JVM target**: 17
 - **Build system**: Gradle with Kotlin DSL (AGP 8.9.1)
-- **Min SDK / Target SDK**: 23 / 35
-- **Networking**: OkHttp 4.12.0
+- **Min SDK / Target SDK**: 26 / 35
+- **Networking**: OkHttp 4.12.0 (Gemini), embedded Ktor 2.3.13 CIO server (frontend)
 - **Serialization**: kotlinx-serialization-json 1.6.3
 - **Coroutines**: kotlinx-coroutines-android 1.7.3
-- **UI**: ViewBinding, Material 3, six selectable themes (GitHub / VS Code / Claude, light + dark)
+- **UI**: htmx frontend in a WebView, Poet pastel design system (Outfit font, 4 accents × 3 canvas tints)
 - **Secure storage**: EncryptedSharedPreferences (AES-256-GCM + AES-256-SIV)
 - **Architecture**: Activity + Service (not MVVM)
 - **ProGuard**: Minification enabled for release builds

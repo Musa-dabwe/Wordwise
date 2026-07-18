@@ -1,44 +1,15 @@
 <resources>
     <string name="app_name">WordWise</string>
-    <string name="tagline">AI grammar correction, system-wide</string>
     <string name="accessibility_service_description">WordWise monitors your text input and fixes grammar when you use the ?fix command. Your text is processed privately using your own API key.</string>
 
-    <!-- Service status -->
-    <string name="label_service_active">SERVICE ACTIVE</string>
-    <string name="label_service_inactive">SERVICE INACTIVE</string>
-    <string name="label_enable">Enable</string>
-    <string name="label_enabled">Enabled ✓</string>
+    <!-- Native chrome -->
     <string name="toast_accessibility_hint">Find and enable WordWise in the list</string>
-
-    <!-- API key -->
-    <string name="label_gemini_api_key">GEMINI API KEY</string>
-    <string name="api_key_hint">Paste your API key here</string>
-    <string name="label_ai_studio_link">Get a free key at Google AI Studio →</string>
-    <string name="gemini_api_url">https://aistudio.google.com</string>
-    <string name="label_save_key">SAVE KEY</string>
-    <string name="toast_api_key_saved">API key saved securely</string>
-    <string name="toast_api_key_empty">API key cannot be empty</string>
-    <string name="toast_api_key_missing">Add your Gemini API key in WordWise first</string>
-
-    <!-- Selectors -->
-    <string name="model_selector_label">MODEL</string>
-    <string name="model_selector_hint">Select model</string>
-    <string name="theme_selector_label">THEME</string>
-    <string name="theme_selector_hint">Select theme</string>
-
-    <!-- How to use -->
-    <string name="label_how_to_use">HOW TO USE</string>
-    <string name="step_1_number">1</string>
-    <string name="step_2_number">2</string>
-    <string name="step_3_number">3</string>
-    <string name="step_1_desc">Type your text in any app (WhatsApp, Gmail, etc.)</string>
-    <string name="step_2_desc">Add ?fix at the end of your sentence or paragraph</string>
-    <string name="step_3_desc">Wait a moment — WordWise replaces it with the corrected text</string>
 
     <!-- Service messages -->
     <string name="toast_service_ready">WordWise is ready! Type ?fix at the end of your text.</string>
     <string name="toast_fixed">✓ Fixed!</string>
     <string name="toast_no_text">No text found to fix</string>
+    <string name="toast_api_key_missing">Add your Gemini API key in WordWise first</string>
     <string name="error_unchanged">No corrections needed — text looks good</string>
     <string name="error_correction_failed">Correction failed: %1$s</string>
     <string name="error_replace_failed">Could not replace text in this field. Try a standard text input field.</string>

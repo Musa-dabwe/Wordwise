@@ -1,160 +1,145 @@
+// Copyright 2026 Fackson Mutetesha (Musa-dabwe)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+
 package com.musa.wordwise
 
-import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.Context
 import android.content.Intent
-import android.content.res.ColorStateList
-import android.net.Uri
+import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
-import android.widget.ArrayAdapter
-import android.widget.Filter
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.color.MaterialColors
-import com.musa.wordwise.data.ApiKeyRepository
-import com.musa.wordwise.databinding.ActivityMainBinding
+import androidx.core.view.WindowInsetsControllerCompat
+import com.musa.wordwise.data.Prefs
+import com.musa.wordwise.server.WwServer
+import java.net.InetSocketAddress
+import java.net.Socket
+import kotlin.concurrent.thread
 
+/**
+ * Native WebView container hosting the htmx frontend served by the embedded
+ * Ktor server. External links (Google AI Studio) open in the browser; the
+ * frontend drives the system Accessibility settings through [WwServer].
+ */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
-    private val apiKeyRepository by lazy { ApiKeyRepository(this) }
+    private lateinit var web: WebView
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(AppTheme.forKey(getSelectedThemeKey(this)).styleRes)
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
 
-        setupApiKeySection()
-        setupModelSelector()
-        setupThemeSelector()
+        // Status bar follows the user's accent color instead of the theme default.
+        applyStatusBarColor(Prefs.getAccent(this))
 
-        binding.saveButton.setOnClickListener {
-            val key = binding.apiKeyInput.text.toString().trim()
-            if (key.isEmpty()) {
-                Toast.makeText(this, R.string.toast_api_key_empty, Toast.LENGTH_SHORT).show()
-            } else {
-                apiKeyRepository.saveApiKey(key)
-                Toast.makeText(this, R.string.toast_api_key_saved, Toast.LENGTH_SHORT).show()
+        WwServer.accessibilitySettingsRequester = {
+            runOnUiThread {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                Toast.makeText(this, R.string.toast_accessibility_hint, Toast.LENGTH_LONG).show()
             }
         }
 
-        binding.enableButton.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, R.string.toast_accessibility_hint, Toast.LENGTH_LONG).show()
+        web = WebView(this)
+        with(web.settings) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            // Pinch and double-tap zoom would stretch the fixed pastel layout;
+            // the viewport meta and touch-action CSS in Shell.kt back this up.
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
         }
-    }
-
-    private fun setupApiKeySection() {
-        binding.apiKeyInput.setText(apiKeyRepository.getApiKey())
-        binding.aiStudioLink.setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.gemini_api_url))))
-        }
-    }
-
-    private fun setupModelSelector() {
-        binding.modelSelector.setAdapter(NoFilterAdapter(this, GEMINI_MODELS))
-        binding.modelSelector.setText(getSelectedModel(this), false)
-        binding.modelSelector.setOnItemClickListener { _, _, position, _ ->
-            prefs(this).edit().putString(KEY_MODEL, GEMINI_MODELS[position]).apply()
-        }
-    }
-
-    private fun setupThemeSelector() {
-        binding.themeSelector.setAdapter(NoFilterAdapter(this, AppTheme.entries.map { it.label }))
-        binding.themeSelector.setText(AppTheme.forKey(getSelectedThemeKey(this)).label, false)
-        binding.themeSelector.setOnItemClickListener { _, _, position, _ ->
-            val theme = AppTheme.entries[position]
-            if (theme.key != getSelectedThemeKey(this)) {
-                prefs(this).edit().putString(KEY_THEME, theme.key).apply()
-                recreate()
+        web.addJavascriptInterface(WwNativeBridge(), "WwNative")
+        web.webChromeClient = WebChromeClient()
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                // Keep navigation inside the embedded server; anything else
+                // (the AI Studio link) opens in the user's browser.
+                if (request.url.host == "127.0.0.1") return false
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                return true
             }
-        }
-    }
 
-    override fun onResume() {
-        super.onResume()
-        checkAccessibilityStatus()
-    }
-
-    private fun checkAccessibilityStatus() {
-        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val isEnabled = am
-            .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            .any { it.resolveInfo.serviceInfo.packageName == packageName }
-
-        val dotColor = MaterialColors.getColor(
-            binding.statusDot,
-            if (isEnabled) R.attr.wwSuccess else com.google.android.material.R.attr.colorError
-        )
-        binding.statusDot.backgroundTintList = ColorStateList.valueOf(dotColor)
-        binding.statusLabel.setText(
-            if (isEnabled) R.string.label_service_active else R.string.label_service_inactive
-        )
-        binding.enableButton.setText(
-            if (isEnabled) R.string.label_enabled else R.string.label_enable
-        )
-    }
-
-    /**
-     * AutoCompleteTextView filters its list against the current text after a
-     * selection, which would leave the dropdown showing only the picked item.
-     * These are fixed-choice selectors, so filtering is disabled entirely.
-     */
-    private class NoFilterAdapter(context: Context, private val items: List<String>) :
-        ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, items) {
-
-        private val noFilter = object : Filter() {
-            override fun performFiltering(constraint: CharSequence?) =
-                FilterResults().apply {
-                    values = items
-                    count = items.size
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                // Serve static assets straight from the APK: no Ktor round trip
+                // and, because intercepted responses bypass Chromium's network
+                // stack, nothing lands in the WebView HTTP disk cache.
+                val url = request.url
+                if (url.host != "127.0.0.1" || url.path?.startsWith("/assets/") != true) return null
+                val name = url.lastPathSegment ?: return null
+                if (!name.matches(Regex("[A-Za-z0-9._-]+"))) return null
+                val mime = when {
+                    name.endsWith(".js") -> "application/javascript"
+                    name.endsWith(".woff2") -> "font/woff2"
+                    name.endsWith(".css") -> "text/css"
+                    else -> "application/octet-stream"
                 }
-
-            override fun publishResults(constraint: CharSequence?, results: FilterResults?) =
-                notifyDataSetChanged()
+                return try {
+                    WebResourceResponse(mime, null, assets.open("web/$name"))
+                } catch (e: Exception) {
+                    null // Fall through to the Ktor /assets route.
+                }
+            }
         }
+        setContentView(web)
 
-        override fun getFilter(): Filter = noFilter
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                web.evaluateJavascript("wwBack()") { result ->
+                    if (result?.contains("exit") == true) moveTaskToBack(true)
+                }
+            }
+        })
+
+        loadWhenServerReady()
     }
 
-    enum class AppTheme(val key: String, val label: String, val styleRes: Int) {
-        GITHUB_DARK("github_dark", "GitHub Dark", R.style.Theme_WordWise_GithubDark),
-        GITHUB_LIGHT("github_light", "GitHub Light", R.style.Theme_WordWise_GithubLight),
-        VSCODE_DARK("vscode_dark", "VS Code Dark", R.style.Theme_WordWise_VscodeDark),
-        VSCODE_LIGHT("vscode_light", "VS Code Light", R.style.Theme_WordWise_VscodeLight),
-        CLAUDE_DARK("claude_dark", "Claude Dark", R.style.Theme_WordWise_ClaudeDark),
-        CLAUDE_LIGHT("claude_light", "Claude Light", R.style.Theme_WordWise_ClaudeLight);
+    private fun applyStatusBarColor(hex: String) {
+        val color = runCatching { Color.parseColor(hex) }.getOrNull() ?: return
+        window.statusBarColor = color
+        // Pastel accents are light, so keep the status bar icons dark.
+        val luminance = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255.0
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = luminance > 0.5
+    }
 
-        companion object {
-            fun forKey(key: String?): AppTheme =
-                entries.firstOrNull { it.key == key } ?: GITHUB_DARK
+    /** Exposed to the WebView so the frontend can drive native chrome. */
+    inner class WwNativeBridge {
+        @JavascriptInterface
+        fun setStatusBarColor(hex: String) {
+            runOnUiThread { if (!isDestroyed) applyStatusBarColor(hex) }
         }
     }
 
-    companion object {
-        private const val PREFS_NAME = "wordwise_prefs"
-        private const val KEY_MODEL = "selected_model"
-        private const val KEY_THEME = "selected_theme"
-        private const val DEFAULT_MODEL = "gemini-3.1-flash-lite"
+    private fun loadWhenServerReady() {
+        thread {
+            for (attempt in 0 until 40) {
+                try {
+                    Socket().use { it.connect(InetSocketAddress("127.0.0.1", WwServer.PORT), 250) }
+                    break
+                } catch (_: Exception) {
+                    Thread.sleep(150)
+                }
+            }
+            runOnUiThread {
+                if (!isDestroyed) web.loadUrl("http://127.0.0.1:${WwServer.PORT}/")
+            }
+        }
+    }
 
-        // Free-tier Gemini models (Flash / Flash-Lite families only).
-        private val GEMINI_MODELS = listOf(
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-flash"
-        )
-
-        private fun prefs(context: Context) =
-            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-
-        fun getSelectedModel(context: Context): String =
-            prefs(context).getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
-
-        private fun getSelectedThemeKey(context: Context): String? =
-            prefs(context).getString(KEY_THEME, null)
+    override fun onDestroy() {
+        WwServer.accessibilitySettingsRequester = null
+        if (::web.isInitialized) web.clearCache(false)
+        super.onDestroy()
     }
 }

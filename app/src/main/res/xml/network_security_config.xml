@@ -5,4 +5,11 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!-- The embedded Ktor server serving the htmx frontend is plain HTTP,
+         but it is bound to the loopback interface inside this app's own
+         process — traffic never leaves the device. Everything else stays
+         TLS-only. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
 </network-security-config>

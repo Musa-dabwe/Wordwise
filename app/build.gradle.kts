@@ -12,10 +12,11 @@ android {
 
     defaultConfig {
         applicationId = "com.musa.wordwise"
-        minSdk = 23
+        // Ktor's server engines need API 26+; matches PoetMusic.
+        minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "2.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -35,9 +36,17 @@ android {
         }
     }
 
-    buildFeatures {
-        viewBinding = true
-
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "META-INF/*.kotlin_module"
+            )
+        }
     }
 
 }
@@ -50,10 +59,12 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("io.ktor:ktor-server-core:2.3.13")
+    implementation("io.ktor:ktor-server-cio:2.3.13")
+    implementation("org.slf4j:slf4j-nop:2.0.13")
 }
