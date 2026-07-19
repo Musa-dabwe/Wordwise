@@ -60,10 +60,7 @@ object WwServer {
             routing {
 
                 get("/") {
-                    call.respondText(
-                        Shell.page(Prefs.getAccent(app), Prefs.getTint(app)),
-                        ContentType.Text.Html
-                    )
+                    call.respondText(Shell.page(Prefs.getTheme(app)), ContentType.Text.Html)
                 }
 
                 get("/assets/{name}") {
@@ -93,8 +90,8 @@ object WwServer {
                     )
                 }
 
-                get("/screens/settings") {
-                    call.respondText(Views.settingsScreen(app), ContentType.Text.Html)
+                get("/screens/about") {
+                    call.respondText(Views.aboutScreen(), ContentType.Text.Html)
                 }
 
                 // ---------- status ----------
@@ -116,7 +113,11 @@ object WwServer {
                         toast("API key cannot be empty")
                     } else {
                         apiKeyRepository.saveApiKey(key)
-                        toast("API key saved securely")
+                        call.response.header(
+                            "HX-Trigger",
+                            """{"ww-toast":"API key saved securely","ww-saved":true}"""
+                        )
+                        call.respond(HttpStatusCode.NoContent)
                     }
                 }
 
@@ -137,15 +138,9 @@ object WwServer {
                     call.respondText(Views.modelCard(app), ContentType.Text.Html)
                 }
 
-                post("/api/settings/accent") {
-                    val c = call.receiveParameters()["c"] ?: return@post noContent()
-                    if (c.matches(Regex("#[0-9a-fA-F]{6}"))) Prefs.setAccent(app, c)
-                    noContent()
-                }
-
                 post("/api/settings/theme") {
                     val name = call.receiveParameters()["name"] ?: return@post noContent()
-                    if (name in Shell.CANVAS_TINTS) Prefs.setTint(app, name)
+                    if (name in Themes.KEYS) Prefs.setTheme(app, name)
                     noContent()
                 }
             }
