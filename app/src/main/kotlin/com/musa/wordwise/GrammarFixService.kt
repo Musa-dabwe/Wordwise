@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.data.Prefs
 import com.musa.wordwise.network.AiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -104,7 +105,7 @@ class GrammarFixService : AccessibilityService() {
                     showToast(getString(R.string.warning_large_text))
                 }
 
-                val model = MainActivity.getSelectedModel(this@GrammarFixService)
+                val model = Prefs.getSelectedModel(this@GrammarFixService)
                 val result = AiClient.fixGrammar(textToFix, apiKey, model)
 
                 stopSpinner(token)

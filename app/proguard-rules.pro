@@ -21,6 +21,13 @@
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
 
+# Ktor (embedded CIO server for the htmx frontend)
+-keep class io.ktor.** { *; }
+-dontwarn io.ktor.**
+-dontwarn org.slf4j.**
+-dontwarn kotlinx.coroutines.**
+-keepclassmembers class kotlinx.coroutines.** { volatile <fields>; }
+
 # Preserve stack traces in release
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
