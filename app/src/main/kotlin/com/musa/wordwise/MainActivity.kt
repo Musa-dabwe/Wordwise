@@ -23,6 +23,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsControllerCompat
 import com.musa.wordwise.data.Prefs
+import com.musa.wordwise.server.Themes
 import com.musa.wordwise.server.WwServer
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -40,8 +41,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Status bar follows the user's accent color instead of the theme default.
-        applyStatusBarColor(Prefs.getAccent(this))
+        // Status bar follows the selected pastel theme's canvas color.
+        applyStatusBarColor(Themes.byKey(Prefs.getTheme(this)).statusBar)
 
         WwServer.accessibilitySettingsRequester = {
             runOnUiThread {
