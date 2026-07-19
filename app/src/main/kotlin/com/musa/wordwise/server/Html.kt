@@ -10,6 +10,12 @@ package com.musa.wordwise.server
 
 /** Tiny helpers for building HTML/JSON safely from Kotlin string templates. */
 
+/**
+ * Escapes special characters for safe inclusion in HTML content.
+ *
+ * @param s The string to escape.
+ * @return The HTML-escaped string.
+ */
 fun esc(s: String): String = buildString(s.length) {
     for (ch in s) when (ch) {
         '&' -> append("&amp;")
@@ -21,6 +27,12 @@ fun esc(s: String): String = buildString(s.length) {
     }
 }
 
+/**
+ * Escapes a string for safe inclusion as a JSON string literal.
+ *
+ * @param s The string to escape.
+ * @return The quoted JSON string literal.
+ */
 fun jsonStr(s: String): String = buildString(s.length + 2) {
     append('"')
     for (ch in s) when (ch) {

@@ -18,6 +18,13 @@ object Shell {
     val CANVAS_TINTS = mapOf("Lavender" to "#f2effa", "Cream" to "#faf5ec", "Sage" to "#eff6f0")
     val ACCENTS = listOf("#b9a5ec", "#9fd8c0", "#f4b89a", "#a5c9ec")
 
+    /**
+     * Generates the complete HTML shell for the WordWise application.
+     *
+     * @param accent The initial accent color.
+     * @param tint The initial canvas tint name.
+     * @return An HTML document configured with the specified theme.
+     */
     fun page(accent: String, tint: String): String {
         val bg = CANVAS_TINTS[tint] ?: CANVAS_TINTS.getValue("Lavender")
         return """<!DOCTYPE html>

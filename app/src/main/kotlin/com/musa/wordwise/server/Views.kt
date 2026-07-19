@@ -21,7 +21,14 @@ object Views {
         "gemini-2.5-flash" to "2.5 workhorse, thinking disabled for speed"
     )
 
-    // ---------------- home ----------------
+    /**
+     * Renders the home screen with service status controls, API key management, model selection, and usage instructions.
+     *
+     * @param context The Android context used to render the model selection card.
+     * @param serviceEnabled Whether the accessibility service is currently enabled.
+     * @param key The API key to display in the key input field.
+     * @return The rendered home screen HTML.
+     */
 
     fun homeScreen(context: Context, serviceEnabled: Boolean, key: String): String {
         return """
@@ -67,7 +74,12 @@ object Views {
         </div>"""
     }
 
-    /** Model picker body — re-rendered in place after a selection commits. */
+    /**
+     * Renders the model picker body for in-place updates after a model selection.
+     *
+     * @param context The Android context used to retrieve the selected model.
+     * @return The rendered HTML for the model picker.
+     */
     fun modelCard(context: Context): String {
         val selected = Prefs.getSelectedModel(context)
         val rows = Prefs.GEMINI_MODELS.joinToString("") { m ->
@@ -87,7 +99,12 @@ object Views {
         <div style="display:flex; flex-direction:column; gap:6px;">$rows</div>"""
     }
 
-    // ---------------- settings ----------------
+    /**
+     * Renders the settings screen with accent color, canvas tint, privacy, and product information.
+     *
+     * @param context The Android context used to load the current appearance settings.
+     * @return The server-rendered HTML for the settings screen.
+     */
 
     fun settingsScreen(context: Context): String {
         val accent = Prefs.getAccent(context)

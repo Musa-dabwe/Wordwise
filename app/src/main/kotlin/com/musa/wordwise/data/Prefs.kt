@@ -33,26 +33,66 @@ object Prefs {
         "gemini-2.5-flash"
     )
 
-    private fun prefs(context: Context) =
+    /**
+         * Provides access to the app's private preferences.
+         *
+         * @return The app's shared preferences.
+         */
+        private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun getSelectedModel(context: Context): String =
+    /**
+         * Retrieves the selected Gemini model.
+         *
+         * @return The stored model identifier, or the default model when none is stored.
+         */
+        fun getSelectedModel(context: Context): String =
         prefs(context).getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
 
+    /**
+     * Stores the selected Gemini model.
+     *
+     * @param context The Android context used to access application preferences.
+     * @param model The Gemini model identifier to store.
+     */
     fun setSelectedModel(context: Context, model: String) {
         prefs(context).edit().putString(KEY_MODEL, model).apply()
     }
 
-    fun getAccent(context: Context): String =
+    /**
+         * Retrieves the saved accent color.
+         *
+         * @param context The context used to access application preferences.
+         * @return The saved accent color, or the default accent color when none is stored.
+         */
+        fun getAccent(context: Context): String =
         prefs(context).getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT
 
+    /**
+     * Stores the accent color preference.
+     *
+     * @param context The Android context used to access preferences.
+     * @param accent The accent color value to store.
+     */
     fun setAccent(context: Context, accent: String) {
         prefs(context).edit().putString(KEY_ACCENT, accent).apply()
     }
 
-    fun getTint(context: Context): String =
+    /**
+         * Retrieves the configured canvas tint.
+         *
+         * @param context The context used to access app preferences.
+         * @return The stored canvas tint, or the default tint when none is configured.
+         */
+        fun getTint(context: Context): String =
         prefs(context).getString(KEY_TINT, DEFAULT_TINT) ?: DEFAULT_TINT
 
+    /**
+     * Stores the canvas tint preference.
+     *
+     * @param context The Android context used to access the preferences.
+     * @param tint The canvas tint value to store.
+     */
     fun setTint(context: Context, tint: String) {
         prefs(context).edit().putString(KEY_TINT, tint).apply()
     }

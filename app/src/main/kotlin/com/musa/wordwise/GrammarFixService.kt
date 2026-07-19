@@ -53,6 +53,14 @@ class GrammarFixService : AccessibilityService() {
         showToast(getString(R.string.toast_service_ready))
     }
 
+    /**
+     * Processes text changes containing the grammar-correction shortcut.
+     *
+     * Sensitive fields and events without the shortcut are ignored. Matching text is
+     * corrected asynchronously and replaced with the result when processing completes.
+     *
+     * @param event The accessibility event containing the changed text.
+     */
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
 
