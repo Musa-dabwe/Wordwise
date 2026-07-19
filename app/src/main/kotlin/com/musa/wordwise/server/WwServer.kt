@@ -43,12 +43,23 @@ object WwServer {
 
     private var started = false
 
+    /**
+     * Determines whether an accessibility service from the application is enabled.
+     *
+     * @param context The context used to access accessibility services and identify the application.
+     * @return `true` if an enabled accessibility service belongs to the application, `false` otherwise.
+     */
     private fun isServiceEnabled(context: Context): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { it.resolveInfo.serviceInfo.packageName == context.packageName }
     }
 
+    /**
+     * Starts the embedded web server on the local device.
+     *
+     * @param context A context used to access application resources and preferences.
+     */
     @Synchronized
     fun start(context: Context) {
         if (started) return
@@ -152,10 +163,18 @@ object WwServer {
         }.start(wait = false)
     }
 
+    /**
+     * Responds with an HTTP 204 No Content status.
+     */
     private suspend fun PipelineContext<Unit, ApplicationCall>.noContent() {
         call.respond(HttpStatusCode.NoContent)
     }
 
+    /**
+     * Responds with no content and triggers a client-side toast notification.
+     *
+     * @param message The text displayed in the toast notification.
+     */
     private suspend fun PipelineContext<Unit, ApplicationCall>.toast(message: String) {
         call.response.header("HX-Trigger", """{"ww-toast":${jsonStr(message)}}""")
         call.respond(HttpStatusCode.NoContent)

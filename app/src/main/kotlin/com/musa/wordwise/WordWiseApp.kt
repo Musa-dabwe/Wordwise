@@ -13,6 +13,9 @@ import com.musa.wordwise.server.WwServer
 
 class WordWiseApp : Application() {
 
+    /**
+     * Initializes the application and starts the WordWise server.
+     */
     override fun onCreate() {
         super.onCreate()
         // Runs before MainActivity creates the WebView so the frontend is

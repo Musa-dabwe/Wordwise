@@ -37,6 +37,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
 
+    /**
+     * Initializes the embedded web frontend, native bridge, navigation handling, and back-press behavior.
+     *
+     * @param savedInstanceState The previously saved activity state, if available.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -105,6 +110,11 @@ class MainActivity : AppCompatActivity() {
         loadWhenServerReady()
     }
 
+    /**
+     * Applies a valid hexadecimal color to the status bar and adjusts its icon appearance for contrast.
+     *
+     * @param hex The hexadecimal color value to apply.
+     */
     private fun applyStatusBarColor(hex: String) {
         val color = runCatching { Color.parseColor(hex) }.getOrNull() ?: return
         window.statusBarColor = color
@@ -115,12 +125,20 @@ class MainActivity : AppCompatActivity() {
 
     /** Exposed to the WebView so the frontend can drive native chrome. */
     inner class WwNativeBridge {
+        /**
+         * Applies a color to the activity's status bar.
+         *
+         * @param hex The status bar color in hexadecimal format.
+         */
         @JavascriptInterface
         fun setStatusBarColor(hex: String) {
             runOnUiThread { if (!isDestroyed) applyStatusBarColor(hex) }
         }
     }
 
+    /**
+     * Loads the embedded frontend after the local server becomes reachable or retries are exhausted.
+     */
     private fun loadWhenServerReady() {
         thread {
             for (attempt in 0 until 40) {
@@ -137,6 +155,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Releases activity resources and clears the WebView cache before destruction.
+     */
     override fun onDestroy() {
         WwServer.accessibilitySettingsRequester = null
         if (::web.isInitialized) web.clearCache(false)
