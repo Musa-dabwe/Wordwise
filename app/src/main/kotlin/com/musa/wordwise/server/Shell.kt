@@ -53,7 +53,10 @@ a { color:var(--accsolid); text-decoration:none; }
 #app { width:100%; max-width:480px; min-height:100vh; margin:0 auto; position:relative;
   display:flex; flex-direction:column; padding:0 24px calc(30px + env(safe-area-inset-bottom)); }
 #main-container { flex:1; }
-.screen { animation:wwScreen .3s both; }
+/* fill-mode must stay "backwards": a filled transform keyframe would make .screen a
+   permanent stacking context, trapping the dropdown popups (z-index 50/51) below the
+   z-index 40 #ww-backdrop, which would then swallow their taps. */
+.screen { animation:wwScreen .3s backwards; }
 
 /* header */
 .hdr { display:flex; align-items:center; gap:13px; margin:18px 0 22px; }
@@ -203,7 +206,10 @@ function wwToast(msg) {
 document.body.addEventListener('ww-toast', function (e) { wwToast(e.detail.value || e.detail); });
 
 document.body.addEventListener('htmx:afterSwap', function (e) {
-  if (e.detail.target && e.detail.target.id === 'main-container') {
+  if (!e.detail.target) return;
+  /* a swap replaces any open dropdown with closed markup, so the backdrop must go too */
+  if (e.detail.target.id === 'model-card') wwCloseDrops();
+  if (e.detail.target.id === 'main-container') {
     var path = e.detail.pathInfo && (e.detail.pathInfo.finalRequestPath || e.detail.pathInfo.requestPath);
     if (path && path.indexOf('/screens/') === 0) wwScreenUrl = path;
     var about = wwScreenUrl.indexOf('/screens/about') === 0;
