@@ -44,7 +44,7 @@ the identity matrix `matrix(1,0,0,1,0,0)`, not `none` — verified with
 dropdown's 50/51 — only competes *within* `.screen` and can never escape it.
 The paint order therefore became:
 
-```
+```text
 #ww-backdrop (z-index 40)          ← painted on top, catches every tap
 └─ .screen stacking context (≈ 0)
    └─ .ww-pop (z-index 51)         ← trapped, painted underneath
