@@ -18,10 +18,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.add
+import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,8 +35,20 @@ import java.util.concurrent.TimeUnit
  */
 object AiClient {
 
+    private const val TAG = "AiClient"
     const val MODEL = "big-pickle"
     private const val ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
+
+    // Stable per-process session ID for OpenCode Zen free-tier routing.
+    // Server rejects free models without this header (MissingSessionID 400).
+    private val sessionId: String by lazy { UUID.randomUUID().toString() }
+
+    // 429 retry backoff delay in milliseconds.
+    private const val RETRY_DELAY_MS = 3_000L
+
+    // Local counter for 429 occurrences (visible in logcat under AiClient tag).
+    @Volatile
+    private var rateLimitCount = 0
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -77,14 +91,13 @@ object AiClient {
                         put("content", text)
                     })
                 })
-                put("temperature", 0.2)
-                put("max_tokens", 2048)
             }.toString()
 
             val request = Request.Builder()
                 .url(ENDPOINT)
                 .header("Authorization", "Bearer $apiKey")
                 .header("Content-Type", "application/json")
+                .header("x-opencode-session", sessionId)
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -100,9 +113,27 @@ object AiClient {
                         ?.let { Result.Success(it) }
                         ?: Result.Failure("No content returned from OpenCode Zen")
                     401, 403 -> Result.Failure("Invalid OpenCode Zen API key — check settings")
-                    429 -> Result.RateLimited("OpenCode Zen rate limit reached — wait a moment")
+                    429 -> {
+                        rateLimitCount++
+                        Log.w(TAG, "429 rate limit (occurrence #$rateLimitCount) — retrying in ${RETRY_DELAY_MS}ms")
+                        Thread.sleep(RETRY_DELAY_MS)
+                        // Single retry: re-execute the same request
+                        httpClient.newCall(request).execute().use { retry ->
+                            val retryRaw = retry.body?.string().orEmpty()
+                            when (retry.code) {
+                                200 -> parseContent(retryRaw)
+                                    ?.let { Result.Success(it) }
+                                    ?: Result.Failure("No content returned from OpenCode Zen")
+                                429 -> {
+                                    Log.w(TAG, "429 rate limit persisted after retry (total: $rateLimitCount)")
+                                    Result.RateLimited("Correction busy — try again shortly")
+                                }
+                                else -> Result.Failure("OpenCode Zen error (HTTP ${retry.code}): $retryRaw")
+                            }
+                        }
+                    }
                     in 500..599 -> Result.Failure("OpenCode Zen issue (HTTP ${response.code}) — try again")
-                    else -> Result.Failure("OpenCode Zen error (HTTP ${response.code})")
+                    else -> Result.Failure("OpenCode Zen error (HTTP ${response.code}): $raw")
                 }
             }
         } catch (e: Exception) {

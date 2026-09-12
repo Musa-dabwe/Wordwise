@@ -75,7 +75,10 @@ No router, no interface, no sealed class — `AiClient` *is* the OpenCode Zen cl
 ### 3.2 Authentication Header
 ```http
 Authorization: Bearer <OPENCODE_ZEN_API_KEY>
+x-opencode-session: <UUID>
 ```
+
+The `x-opencode-session` header carries a client-generated, stable UUID v4 that persists for the life of the app process. Without this header, OpenCode Zen returns HTTP 400 `MissingSessionID` for free-tier models. The server uses this for routing/cache-affinity — it accepts any UUID the client generates.
 
 ### 3.3 Model Specification
 - **Hardcoded Model Identifier:** `big-pickle`
@@ -94,11 +97,11 @@ Authorization: Bearer <OPENCODE_ZEN_API_KEY>
       "role": "user",
       "content": "i has a apple"
     }
-  ],
-  "temperature": 0.2,
-  "max_tokens": 2048
+  ]
 }
 ```
+
+**Note:** The `big-pickle` model served via `@ai-sdk/openai-compatible` rejects requests that include `temperature` or `max_tokens`. These fields are omitted to match the working reference implementation (pi-opencode).
 
 ### 3.5 Response Structure & Parsing
 ```json
@@ -163,6 +166,8 @@ object AiClient {
         data class Failure(val message: String) : Result()
     }
 
+    private val sessionId: String by lazy { UUID.randomUUID().toString() }
+
     fun buildRequest(text: String, apiKey: String): Request {
         val payload = buildJsonObject {
             put("model", MODEL)
@@ -170,14 +175,13 @@ object AiClient {
                 add(buildJsonObject { put("role", "system"); put("content", SYSTEM_PROMPT) })
                 add(buildJsonObject { put("role", "user"); put("content", text) })
             })
-            put("temperature", 0.2)
-            put("max_tokens", 2048)
         }.toString()
 
         return Request.Builder()
             .url(ENDPOINT)
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
+            .header("x-opencode-session", sessionId)
             .post(payload.toRequestBody(JSON_MEDIA_TYPE))
             .build()
     }
@@ -189,7 +193,7 @@ object AiClient {
         401, 403 -> Result.Failure("Invalid OpenCode Zen API key — check settings")
         429 -> Result.RateLimited("OpenCode Zen rate limit reached — wait a moment")
         in 500..599 -> Result.Failure("OpenCode Zen issue (HTTP $statusCode) — try again")
-        else -> Result.Failure("OpenCode Zen error (HTTP $statusCode)")
+        else -> Result.Failure("OpenCode Zen error (HTTP $statusCode): $responseBody")
     }
 
     private fun parseContent(jsonString: String): String? = try {
@@ -278,7 +282,7 @@ This is the part that actually needs care, since existing users have a working G
 ## 8. Testing & Verification Specification
 
 ### 8.1 Unit Tests (`AiClientTest.kt`)
-- `buildRequest_createsValidOpenAICompatiblePayload`: Verifies JSON contains `model: "big-pickle"`, system prompt, user prompt, and `Authorization: Bearer <key>` header.
+- `buildRequest_createsValidOpenAICompatiblePayload`: Verifies JSON contains `model: "big-pickle"`, system prompt, user prompt, `Authorization: Bearer <key>` header, and `x-opencode-session` header.
 - `parseResponse_extractsContentFromChoices`: Verifies parsing of `choices[0].message.content`.
 - `parseResponse_handlesHttp401And429`: Verifies 401 → failure, 429 → rate-limited variant.
 - All existing Gemini-specific unit tests (payload shape, `candidates[0].content.parts[0].text` parsing, Gemini error mapping) are deleted, not left disabled.
@@ -309,3 +313,19 @@ This is the part that actually needs care, since existing users have a working G
 | `res/xml/network_security_config.xml` (if applicable) | Modified | Remove Gemini domain allow-list entry once unused |
 
 ---
+
+## 10. Known Issues & Resolutions
+
+### MissingSessionID 400 — RESOLVED
+
+**Symptom:** OpenCode Zen returned HTTP 400 `MissingSessionID` for free-tier models (`big-pickle`, `mimo-v2.5-free`).
+
+**Root cause:** Free models require an `x-opencode-session` header carrying a client-generated UUID. Without it, the gateway rejects the request regardless of API key validity.
+
+**Fix:** Added `header("x-opencode-session", sessionId)` to `AiClient.kt` request builder (stable per-process UUID via `lazy { UUID.randomUUID().toString() }`).
+
+**Investigation ruled out:** HTTP-Referer, X-Title, and custom User-Agent headers were investigated (Mobile-Harness OpenRouter comparison, `docs/harnessreport.md`) and confirmed unnecessary for OpenCode Zen. No TUI-vs-non-TUI client detection exists at the protocol level.
+
+### 429 Rate Limits — Open
+
+Big Pickle is a shared free-tier model. HTTP 429 (`FreeUsageLimitError`) may occur under load. See Phase 2 notes in session file for retry/backoff approach.
