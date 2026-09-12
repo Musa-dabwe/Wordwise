@@ -25,69 +25,22 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
- * Singleton AI client for Google Gemini.
+ * Singleton AI client for OpenCode Zen.
  *
  * OkHttpClient is shared across all calls to reuse the connection pool.
- * The API key is sent via the `x-goog-api-key` header — never in the URL —
+ * The API key is sent via the Authorization header — never in the URL —
  * so it cannot leak into request logs.
  */
 object AiClient {
 
-    private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+    const val MODEL = "big-pickle"
+    private const val ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
-
-    sealed class Result {
-        data class Success(val text: String) : Result()
-        data class RateLimited(val message: String) : Result()
-        data class Failure(val error: String) : Result()
-    }
-
-    /**
-     * Sends [text] to Gemini for grammar and style correction.
-     * Returns a [Result] — callers must handle all three cases.
-     *
-     * This function owns its own [withContext] switch. The call site in
-     * GrammarFixService must NOT wrap this call in another withContext.
-     */
-    suspend fun fixGrammar(text: String, apiKey: String, model: String): Result =
-        withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("$GEMINI_BASE_URL/$model:generateContent")
-                .header("x-goog-api-key", apiKey)
-                .post(buildRequestBody(text, model).toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-            executeRequest(request, model)
-        }
-
-    private fun buildRequestBody(text: String, model: String): String = buildJsonObject {
-        put("system_instruction", buildJsonObject {
-            put("parts", buildJsonArray {
-                add(buildJsonObject { put("text", GRAMMAR_SYSTEM_PROMPT) })
-            })
-        })
-        put("contents", buildJsonArray {
-            add(buildJsonObject {
-                put("role", "user")
-                put("parts", buildJsonArray {
-                    add(buildJsonObject { put("text", text) })
-                })
-            })
-        })
-        // Grammar fixing needs determinism, not reasoning. Gemini 2.5 models
-        // accept a zero thinking budget; Gemini 3+ models perform best with
-        // their default sampling settings, so no config is sent for them.
-        if (model.startsWith("gemini-2.5")) {
-            put("generationConfig", buildJsonObject {
-                put("temperature", 0.2)
-                put("thinkingConfig", buildJsonObject { put("thinkingBudget", 0) })
-            })
-        }
-    }.toString()
 
     private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
@@ -97,51 +50,75 @@ object AiClient {
         "Preserve the original language and meaning exactly. " +
         "Do not add any explanations, commentary, or quotation marks."
 
-    private fun executeRequest(request: Request, model: String): Result {
+    sealed class Result {
+        data class Success(val text: String) : Result()
+        data class RateLimited(val message: String) : Result()
+        data class Failure(val error: String) : Result()
+    }
+
+    /**
+     * Sends [text] to OpenCode Zen for grammar and style correction.
+     * Returns a [Result] — callers must handle all three cases.
+     *
+     * This function owns its own [withContext] switch. The call site in
+     * GrammarFixService must NOT wrap this call in another withContext.
+     */
+    suspend fun fixGrammar(text: String, apiKey: String): Result =
+        withContext(Dispatchers.IO) {
+            val payload = buildJsonObject {
+                put("model", MODEL)
+                put("messages", buildJsonArray {
+                    add(buildJsonObject {
+                        put("role", "system")
+                        put("content", GRAMMAR_SYSTEM_PROMPT)
+                    })
+                    add(buildJsonObject {
+                        put("role", "user")
+                        put("content", text)
+                    })
+                })
+                put("temperature", 0.2)
+                put("max_tokens", 2048)
+            }.toString()
+
+            val request = Request.Builder()
+                .url(ENDPOINT)
+                .header("Authorization", "Bearer $apiKey")
+                .header("Content-Type", "application/json")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            executeRequest(request)
+        }
+
+    private fun executeRequest(request: Request): Result {
         return try {
             httpClient.newCall(request).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
                 when (response.code) {
-                    200 -> parseCandidateText(raw)
+                    200 -> parseContent(raw)
                         ?.let { Result.Success(it) }
-                        ?: Result.Failure("No text returned — the response may have been blocked")
-                    429 -> Result.RateLimited("Free-tier limit reached — wait a minute and try again")
-                    400, 401, 403 -> {
-                        val message = parseErrorMessage(raw)
-                        if (message != null && message.contains("api key", ignoreCase = true)) {
-                            Result.Failure("Invalid API key — check it in WordWise settings")
-                        } else {
-                            Result.Failure(message ?: "Request rejected (HTTP ${response.code})")
-                        }
-                    }
-                    404 -> Result.Failure("Model '$model' is not available — pick another in WordWise")
-                    in 500..599 -> Result.Failure("Gemini is having issues (HTTP ${response.code}) — try again")
-                    else -> Result.Failure(parseErrorMessage(raw) ?: "HTTP ${response.code}")
+                        ?: Result.Failure("No content returned from OpenCode Zen")
+                    401, 403 -> Result.Failure("Invalid OpenCode Zen API key — check settings")
+                    429 -> Result.RateLimited("OpenCode Zen rate limit reached — wait a moment")
+                    in 500..599 -> Result.Failure("OpenCode Zen issue (HTTP ${response.code}) — try again")
+                    else -> Result.Failure("OpenCode Zen error (HTTP ${response.code})")
                 }
             }
         } catch (e: Exception) {
-            Result.Failure(e.message ?: "Unknown network error")
+            Result.Failure(e.message ?: "Network error connecting to OpenCode Zen")
         }
     }
 
-    private fun parseCandidateText(responseBody: String): String? = try {
-        Json.parseToJsonElement(responseBody)
-            .jsonObject["candidates"]
+    internal fun parseContent(jsonString: String): String? = try {
+        Json.parseToJsonElement(jsonString)
+            .jsonObject["choices"]
             ?.jsonArray?.getOrNull(0)
-            ?.jsonObject?.get("content")
-            ?.jsonObject?.get("parts")
-            ?.jsonArray?.getOrNull(0)
-            ?.jsonObject?.get("text")
-            ?.jsonPrimitive?.content?.trim()
-    } catch (e: Exception) {
-        null
-    }
-
-    private fun parseErrorMessage(responseBody: String): String? = try {
-        Json.parseToJsonElement(responseBody)
-            .jsonObject["error"]
             ?.jsonObject?.get("message")
+            ?.jsonObject?.get("content")
             ?.jsonPrimitive?.content
+            ?.trim()
+            ?.trim('"')
     } catch (e: Exception) {
         null
     }

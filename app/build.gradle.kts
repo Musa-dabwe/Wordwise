@@ -15,8 +15,8 @@ android {
         // Ktor's server engines need API 26+; matches PoetMusic.
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.0"
+        versionCode = 4
+        versionName = "3.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -67,4 +67,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core:2.3.13")
     implementation("io.ktor:ktor-server-cio:2.3.13")
     implementation("org.slf4j:slf4j-nop:2.0.13")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }

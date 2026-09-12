@@ -41,15 +41,33 @@ class ApiKeyRepository(private val context: Context) {
     }
 
     fun saveApiKey(key: String) {
-        prefs.edit().putString(KEY_API_KEY_GEMINI, key).apply()
+        prefs.edit().putString(KEY_API_KEY, key).apply()
     }
 
     fun getApiKey(): String {
-        return prefs.getString(KEY_API_KEY_GEMINI, "") ?: ""
+        return prefs.getString(KEY_API_KEY, "") ?: ""
+    }
+
+    fun hasApiKey(): Boolean = getApiKey().isNotBlank()
+
+    /**
+     * Checks whether a legacy Gemini key exists from before the OpenCode Zen
+     * migration. Used by the one-time migration notice in GrammarFixService.
+     * This method should be deleted once the migration notice is removed.
+     */
+    fun hasLegacyGeminiKey(): Boolean = prefs.contains(KEY_LEGACY_GEMINI)
+
+    /**
+     * Removes the legacy Gemini key from encrypted storage.
+     * Called after the migration notice is shown.
+     */
+    fun removeLegacyGeminiKey() {
+        prefs.edit().remove(KEY_LEGACY_GEMINI).apply()
     }
 
     companion object {
         private const val PREFS_NAME = "secret_keys"
-        private const val KEY_API_KEY_GEMINI = "api_key_gemini"
+        private const val KEY_API_KEY = "api_key_opencode_zen"
+        private const val KEY_LEGACY_GEMINI = "api_key_gemini"
     }
 }

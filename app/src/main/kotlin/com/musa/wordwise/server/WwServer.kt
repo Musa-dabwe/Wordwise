@@ -129,15 +129,6 @@ object WwServer {
                     else { requester(); noContent() }
                 }
 
-                post("/api/settings/model") {
-                    val m = call.request.queryParameters["m"]
-                    if (m != null && m in Prefs.GEMINI_MODELS) {
-                        Prefs.setSelectedModel(app, m)
-                        call.response.header("HX-Trigger", """{"ww-toast":"Model set to $m"}""")
-                    }
-                    call.respondText(Views.modelCard(app), ContentType.Text.Html)
-                }
-
                 post("/api/settings/theme") {
                     val name = call.receiveParameters()["name"] ?: return@post noContent()
                     if (name in Themes.KEYS) Prefs.setTheme(app, name)

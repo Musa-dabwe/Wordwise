@@ -1,29 +1,36 @@
-# Specification: OpenCode Zen Integration & Multi-Provider Architecture
+# Specification: OpenCode Zen (`big-pickle`) as WordWise's Sole AI Provider
 
-**Document Status:** Proposed / Under Review
+**Document Status:** Revised — Full Replacement (not multi-provider)
 **Author:** WordWise Engineering
 **Target Release:** WordWise 2.0
-**Feature:** OpenCode Zen AI Provider Support with Hardcoded `big-pickle` Model
+**Feature:** Replace Gemini entirely with OpenCode Zen's hardcoded `big-pickle` model
+
+---
+
+## 0. Revision Note
+
+The original draft of this spec proposed a pluggable multi-provider architecture (`AiProvider` interface, `ProviderType` sealed class, provider selector UI) with Gemini and OpenCode Zen coexisting. **That is no longer the plan.** OpenCode Zen's `big-pickle` model is replacing Gemini outright as WordWise's only AI backend. This revision strips out every piece of multi-provider scaffolding that only existed to support switching between two providers, since there will only ever be one active provider going forward.
+
+Keeping the abstraction would have been speculative generality for a codebase this size — it adds a sealed class, an interface, per-provider prefs branching, and a settings toggle, all to support a choice that no longer exists. Simpler wins here.
 
 ---
 
 ## 1. Executive Summary & Objectives
 
-WordWise currently relies exclusively on Google Gemini (`gemini-3.1-flash-lite`, `gemini-3.5-flash`, etc.) for text correction. While Gemini offers robust free-tier performance, relying on a single provider presents a single point of failure when rate limits (HTTP 429) or service outages occur.
-
-This specification details the architecture and implementation plan for adding **OpenCode Zen** as a supported AI provider in WordWise, alongside a clean multi-provider refactoring of the network and settings layers.
+WordWise currently relies exclusively on Google Gemini (`gemini-2.5-flash-lite`, etc.) for text correction. Gemini's free-tier rate limits (HTTP 429) have been a recurring source of user friction. Rather than adding a second provider alongside Gemini, WordWise is **replacing Gemini entirely** with OpenCode Zen's free, unmetered stealth model `big-pickle`.
 
 ### Key Highlights
-- **Hardcoded Stealth Model (`big-pickle`):** OpenCode Zen's free stealth model `big-pickle` will be hardcoded as the default and sole model for OpenCode Zen. Because `big-pickle` has been free and unmetered since launch, it provides a stable, zero-cost, limit-free option for users without requiring complex model selection UI.
-- **Pluggable Architecture:** Introduction of an `AiProvider` interface separating provider-specific payload creation and response parsing from the dispatch logic.
-- **Secure Key Management:** Support for multi-provider API keys stored securely via `EncryptedSharedPreferences`.
-- **Seamless UI Switching:** Interactive provider toggle in the htmx embedded web frontend with dynamic key management and model status display.
+- **Full Replacement, Not Addition:** Gemini support (`GeminiProvider`/equivalent Gemini payload+parsing code, Gemini model selection UI, Gemini-specific prefs) is removed, not kept alongside OpenCode Zen.
+- **Hardcoded Model (`big-pickle`):** No model selection UI is needed — `big-pickle` is the only model WordWise will ever call.
+- **Simplified Network Layer:** `AiClient` talks directly to OpenCode Zen's OpenAI-compatible endpoint. No provider dispatch/router is needed since there is only one provider.
+- **Single API Key:** `ApiKeyRepository` stores one encrypted key (OpenCode Zen). The old Gemini key entry is migrated/cleared, not kept as a second slot.
+- **Simplified Settings UI:** The provider toggle is removed. Settings shows one API key field and a fixed `big-pickle` model badge.
 
 ---
 
 ## 2. Architectural Comparison
 
-### Current Architecture (Single Provider)
+### Before (Gemini only)
 ```
 +---------------------+     +--------------------+     +-------------------+
 | GrammarFixService   | --> | ApiKeyRepository   | --> | Prefs (Gemini)    |
@@ -33,52 +40,46 @@ This specification details the architecture and implementation plan for adding *
 +--------------------------------------------------------------------------+
 | AiClient (Singleton)                                                     |
 |  - Hardcoded URL: https://generativelanguage.googleapis.com/...          |
-|  - Gemini Json payload builder & candidate text parser                    |
+|  - Gemini JSON payload builder & candidate text parser                    |
 +--------------------------------------------------------------------------+
 ```
 
-### Target Architecture (Multi-Provider Architecture)
+### After (OpenCode Zen only — full replacement)
 ```
 +---------------------+     +--------------------+     +-------------------+
 | GrammarFixService   | --> | ApiKeyRepository   | --> | Prefs             |
-+---------------------+     | (Gemini & OpenCode)|     | (Provider & Model)|
++---------------------+     | (single key)       |     | (no provider flag)|
           |                 +--------------------+     +-------------------+
           v
 +--------------------------------------------------------------------------+
-| AiClient (Provider Router / Singleton Dispatcher)                        |
-|   - Delegates request to active provider implementation                  |
+| AiClient (Singleton — OpenCode Zen only)                                 |
+|  - Hardcoded URL: https://opencode.ai/zen/v1/chat/completions           |
+|  - Hardcoded model: "big-pickle"                                         |
+|  - OpenAI-compatible JSON payload builder & choices[0].message parser    |
 +--------------------------------------------------------------------------+
-           |                                        |
-           v                                        v
-+-----------------------+                +------------------------+
-| GeminiProvider        |                | OpenCodeZenProvider    |
-| - Endpoint: Google AI |                | - Endpoint: OpenCode   |
-| - Custom Gemini JSON  |                | - OpenAI-compatible    |
-| - Models: gemini-*    |                | - Model: "big-pickle"  |
-+-----------------------+                +------------------------+
 ```
+
+No router, no interface, no sealed class — `AiClient` *is* the OpenCode Zen client now, the same way it was the Gemini client before. This mirrors the original architecture's shape, just pointed at a different backend.
 
 ---
 
 ## 3. OpenCode Zen Protocol & Technical Specification
 
 ### 3.1 Endpoint & Transport Configuration
-- **Base Endpoint:** `https://api.opencode.zen/v1` (with optional runtime fallback support for custom base URLs if configured).
-- **Route:** `/chat/completions` (OpenAI-compatible REST protocol).
+- **Base Endpoint:** `https://opencode.ai/zen/v1`
+- **Route:** `/chat/completions` (OpenAI-compatible REST protocol)
 - **HTTP Method:** `POST`
 - **Content-Type:** `application/json`
-- **TLS Version:** TLS 1.3 / TLS 1.2 strict.
+- **TLS Version:** TLS 1.3 / TLS 1.2 strict
 
 ### 3.2 Authentication Header
-OpenCode Zen uses standard HTTP Bearer token authentication:
 ```http
 Authorization: Bearer <OPENCODE_ZEN_API_KEY>
 ```
 
 ### 3.3 Model Specification
 - **Hardcoded Model Identifier:** `big-pickle`
-- **Description:** OpenCode Zen's free stealth model.
-- **Rationale:** Hardcoding `big-pickle` eliminates configuration friction for end users and guarantees access to OpenCode's stable free tier.
+- **Rationale:** Free, unmetered stealth model since launch — eliminates both configuration friction and the 429s that motivated this replacement in the first place.
 
 ### 3.4 Request Payload
 ```json
@@ -109,91 +110,45 @@ Authorization: Bearer <OPENCODE_ZEN_API_KEY>
   "choices": [
     {
       "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "I have an apple."
-      },
+      "message": { "role": "assistant", "content": "I have an apple." },
       "finish_reason": "stop"
     }
   ],
-  "usage": {
-    "prompt_tokens": 42,
-    "completion_tokens": 5,
-    "total_tokens": 47
-  }
+  "usage": { "prompt_tokens": 42, "completion_tokens": 5, "total_tokens": 47 }
 }
 ```
 
-**JSON Parsing Extraction Path:**
-`choices[0].message.content` -> trim whitespace and trailing/leading quotes if present.
+**JSON Parsing Extraction Path:** `choices[0].message.content` → trim whitespace and leading/trailing quotes if present.
 
 ### 3.6 Error Mapping Strategy
-| HTTP Code | OpenCode Zen Response / Condition | Mapped WordWise `Result` | User-Facing Message |
-|-----------|-----------------------------------|--------------------------|---------------------|
-| 200 | Valid response JSON with `choices[0].message.content` | `Result.Success(text)` | "Text corrected" |
+| HTTP Code | Condition | Mapped `Result` | User-Facing Message |
+|-----------|-----------|------------------|----------------------|
+| 200 | Valid JSON with `choices[0].message.content` | `Result.Success(text)` | "Text corrected" |
 | 401 / 403 | Invalid, expired, or missing API key | `Result.Failure` | "Invalid OpenCode Zen API key — check settings" |
 | 429 | Rate limit exceeded | `Result.RateLimited` | "OpenCode Zen rate limit reached — wait a moment" |
-| 500 - 599 | OpenCode Zen service unavailable / server error | `Result.Failure` | "OpenCode Zen issue (HTTP {code}) — try again" |
-| Timeout / Exception | Socket or network connection failure | `Result.Failure` | "Network error connecting to OpenCode Zen" |
+| 500–599 | Service unavailable / server error | `Result.Failure` | "OpenCode Zen issue (HTTP {code}) — try again" |
+| Timeout / Exception | Socket or network failure | `Result.Failure` | "Network error connecting to OpenCode Zen" |
 
 ---
 
 ## 4. Component Design & Code Structure
 
-### 4.1 Interface Abstraction (`AiProvider.kt`)
+### 4.1 `AiClient.kt` (Modified — replaces Gemini logic directly, no interface/dispatch)
 
 ```kotlin
 package com.musa.wordwise.network
 
-import okhttp3.Request
-
-sealed class ProviderType(val id: String, val displayName: String) {
-    object Gemini : ProviderType("gemini", "Google Gemini")
-    object OpenCodeZen : ProviderType("opencode_zen", "OpenCode Zen")
-
-    companion object {
-        fun fromId(id: String): ProviderType = when (id) {
-            OpenCodeZen.id -> OpenCodeZen
-            else -> Gemini
-        }
-    }
-}
-
-interface AiProvider {
-    val providerType: ProviderType
-
-    /** Build OkHttp Request for grammar correction */
-    fun buildRequest(text: String, apiKey: String, model: String): Request
-
-    /** Parse raw HTTP response body into Result */
-    fun parseResponse(responseBody: String, statusCode: Int): AiClient.Result
-}
-```
-
-### 4.2 OpenCode Zen Implementation (`OpenCodeZenProvider.kt`)
-
-```kotlin
-package com.musa.wordwise.network
-
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.add
+import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-object OpenCodeZenProvider : AiProvider {
+object AiClient {
 
-    override val providerType = ProviderType.OpenCodeZen
-
-    /** Hardcoded stealth free model for OpenCode Zen */
-    const val HARDCODED_MODEL = "big-pickle"
-    private const val BASE_URL = "https://api.opencode.zen/v1/chat/completions"
+    /** Hardcoded stealth free model — WordWise's only supported model. */
+    const val MODEL = "big-pickle"
+    private const val ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
     private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
     private const val SYSTEM_PROMPT =
@@ -202,43 +157,39 @@ object OpenCodeZenProvider : AiProvider {
         "Preserve the original language and meaning exactly. " +
         "Do not add any explanations, commentary, or quotation marks."
 
-    override fun buildRequest(text: String, apiKey: String, model: String): Request {
+    sealed class Result {
+        data class Success(val text: String) : Result()
+        data class RateLimited(val message: String) : Result()
+        data class Failure(val message: String) : Result()
+    }
+
+    fun buildRequest(text: String, apiKey: String): Request {
         val payload = buildJsonObject {
-            put("model", HARDCODED_MODEL)
+            put("model", MODEL)
             put("messages", buildJsonArray {
-                add(buildJsonObject {
-                    put("role", "system")
-                    put("content", SYSTEM_PROMPT)
-                })
-                add(buildJsonObject {
-                    put("role", "user")
-                    put("content", text)
-                })
+                add(buildJsonObject { put("role", "system"); put("content", SYSTEM_PROMPT) })
+                add(buildJsonObject { put("role", "user"); put("content", text) })
             })
             put("temperature", 0.2)
             put("max_tokens", 2048)
         }.toString()
 
         return Request.Builder()
-            .url(BASE_URL)
+            .url(ENDPOINT)
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .post(payload.toRequestBody(JSON_MEDIA_TYPE))
             .build()
     }
 
-    override fun parseResponse(responseBody: String, statusCode: Int): AiClient.Result {
-        return when (statusCode) {
-            200 -> {
-                val text = parseContent(responseBody)
-                if (text != null) AiClient.Result.Success(text)
-                else AiClient.Result.Failure("No content returned from OpenCode Zen")
-            }
-            401, 403 -> AiClient.Result.Failure("Invalid OpenCode Zen API key — check settings")
-            429 -> AiClient.Result.RateLimited("OpenCode Zen rate limit reached — wait a moment")
-            in 500..599 -> AiClient.Result.Failure("OpenCode Zen issue (HTTP $statusCode) — try again")
-            else -> AiClient.Result.Failure("OpenCode Zen error (HTTP $statusCode)")
-        }
+    fun parseResponse(responseBody: String, statusCode: Int): Result = when (statusCode) {
+        200 -> parseContent(responseBody)
+            ?.let { Result.Success(it) }
+            ?: Result.Failure("No content returned from OpenCode Zen")
+        401, 403 -> Result.Failure("Invalid OpenCode Zen API key — check settings")
+        429 -> Result.RateLimited("OpenCode Zen rate limit reached — wait a moment")
+        in 500..599 -> Result.Failure("OpenCode Zen issue (HTTP $statusCode) — try again")
+        else -> Result.Failure("OpenCode Zen error (HTTP $statusCode)")
     }
 
     private fun parseContent(jsonString: String): String? = try {
@@ -254,118 +205,91 @@ object OpenCodeZenProvider : AiProvider {
 }
 ```
 
-### 4.3 Key Storage Update (`ApiKeyRepository.kt`)
+Files removed entirely (no longer needed once there's a single provider): the Gemini payload-builder/parser code, `AiProvider.kt` interface, `ProviderType.kt` sealed class, and any provider-router dispatch code, if these existed in the codebase from earlier scaffolding.
 
-`ApiKeyRepository` will be updated to store keys keyed by provider type:
+### 4.2 Key Storage (`ApiKeyRepository.kt`) — single key, not multi-key
+
 ```kotlin
-fun saveApiKey(provider: ProviderType, key: String) {
-    val prefKey = when (provider) {
-        ProviderType.Gemini -> KEY_API_KEY_GEMINI
-        ProviderType.OpenCodeZen -> KEY_API_KEY_OPENCODE_ZEN
-    }
-    prefs.edit().putString(prefKey, key).apply()
-}
+class ApiKeyRepository(context: Context) {
+    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
+        context, PREFS_NAME, /* ... master key ... */,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
-fun getApiKey(provider: ProviderType): String {
-    val prefKey = when (provider) {
-        ProviderType.Gemini -> KEY_API_KEY_GEMINI
-        ProviderType.OpenCodeZen -> KEY_API_KEY_OPENCODE_ZEN
-    }
-    return prefs.getString(prefKey, "") ?: ""
-}
+    fun saveApiKey(key: String) = prefs.edit().putString(KEY_API_KEY, key).apply()
+    fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
+    fun hasApiKey(): Boolean = getApiKey().isNotBlank()
 
-companion object {
-    private const val PREFS_NAME = "secret_keys"
-    private const val KEY_API_KEY_GEMINI = "api_key_gemini"
-    private const val KEY_API_KEY_OPENCODE_ZEN = "api_key_opencode_zen"
+    companion object {
+        private const val PREFS_NAME = "secret_keys"
+        private const val KEY_API_KEY = "api_key_opencode_zen"
+    }
 }
 ```
 
-### 4.4 App Preferences (`Prefs.kt`)
+No `ProviderType` parameter — there is only one key to store.
 
-```kotlin
-private const val KEY_PROVIDER = "selected_provider"
-const val DEFAULT_PROVIDER = "gemini"
+### 4.3 App Preferences (`Prefs.kt`) — no provider flag, no model selection
 
-fun getSelectedProvider(context: Context): ProviderType {
-    val id = prefs(context).getString(KEY_PROVIDER, DEFAULT_PROVIDER) ?: DEFAULT_PROVIDER
-    return ProviderType.fromId(id)
-}
-
-fun setSelectedProvider(context: Context, provider: ProviderType) {
-    prefs(context).edit().putString(KEY_PROVIDER, provider.id).apply()
-}
-```
+The `selected_provider` pref, `DEFAULT_PROVIDER`, `getSelectedProvider()`, and `setSelectedProvider()` are all deleted. There is nothing left to select. Any Gemini model-selection pref (e.g. `selected_gemini_model`) is deleted as well.
 
 ---
 
 ## 5. UI & Web Frontend Updates (`Views.kt` & `WwServer.kt`)
 
-### 5.1 Provider Selection UI
-The home screen will feature a Provider Selector component allowing seamless switching between **Google Gemini** and **OpenCode Zen**:
-
-1. **Provider Tabs / Dropdown:**
-   - Option 1: **Google Gemini** (Selectable Gemini models: `gemini-3.1-flash-lite`, etc.)
-   - Option 2: **OpenCode Zen** (Hardcoded model badge: `big-pickle` - Stealth Free Model)
-
-2. **OpenCode Zen Settings Fragment:**
-   - Dedicated API Key Input field for OpenCode Zen.
-   - Information callout: *"OpenCode Zen uses stealth model big-pickle (Free & Unlimited)."*
-   - Link to OpenCode Zen dashboard for key generation.
+The provider selector (tabs/dropdown between Gemini and OpenCode Zen) is **removed**, not conditionally shown. Settings becomes:
 
 ```html
-<div class="ww-lab" style="margin-bottom:10px;">AI PROVIDER</div>
-<div style="display:flex; gap:10px; margin-bottom:18px;">
-  <button class="ww-btn ${if (activeProvider == ProviderType.Gemini) "active" else ""}"
-          hx-post="/api/settings/provider?p=gemini" hx-target="#home-content">
-    Google Gemini
-  </button>
-  <button class="ww-btn ${if (activeProvider == ProviderType.OpenCodeZen) "active" else ""}"
-          hx-post="/api/settings/provider?p=opencode_zen" hx-target="#home-content">
-    OpenCode Zen
-  </button>
-</div>
+<div class="ww-lab" style="margin-bottom:10px;">AI MODEL</div>
+<div class="ww-model-badge">big-pickle — Free Model (OpenCode Zen)</div>
+
+<div class="ww-lab" style="margin-top:18px; margin-bottom:10px;">API KEY</div>
+<input type="password" name="opencode_zen_key" placeholder="Enter your OpenCode Zen API key" />
+<button class="ww-btn" hx-post="/api/key/opencode_zen" hx-target="#home-content">Save</button>
+<p class="ww-hint">Get a free key from the OpenCode Zen dashboard.</p>
 ```
 
-When OpenCode Zen is selected as the active provider:
-- The Model Selection card displays a fixed non-editable row:
-  `big-pickle — Hardcoded Stealth Model (Free)`
+- `/api/settings/provider` route is deleted (nothing to switch between).
+- `/api/key/opencode_zen` remains as the sole key-saving route; `/api/key/gemini` is deleted.
+- The Gemini model-selection dropdown UI is deleted.
 
 ---
 
 ## 6. Security, TLS & Privacy
 
-1. **API Key Isolation:**
-   - OpenCode Zen keys are encrypted via AES-256-GCM / AES-256-SIV in `EncryptedSharedPreferences`.
-   - Never logged or exposed in stack traces.
-2. **Network Policy:**
-   - Cleartext HTTP traffic is blocked for external domains.
-   - OpenCode Zen requests enforce HTTPS / TLS 1.3.
-3. **Sensitive Field Filtering:**
-   - `GrammarFixService` checks `isSensitiveField(node)` before dispatching text to OpenCode Zen. Password and PIN fields are never inspected.
+1. **API Key Storage:** OpenCode Zen key encrypted via AES-256-GCM / AES-256-SIV in `EncryptedSharedPreferences`. Never logged or exposed in stack traces.
+2. **Network Policy:** Cleartext HTTP blocked for external domains; OpenCode Zen requests enforce HTTPS/TLS 1.3. The old `generativelanguage.googleapis.com` network security config entry (if allow-listed explicitly) can be removed once Gemini calls are gone.
+3. **Sensitive Field Filtering:** `GrammarFixService` continues to check `isSensitiveField(node)` before dispatching text — this check is provider-agnostic and unaffected by the swap.
 
 ---
 
-## 7. Backward Compatibility & Migration Strategy
+## 7. Migration Strategy (Existing Users)
 
-- **Default State:** Defaults to `ProviderType.Gemini` for existing users.
-- **Key Migration:** Existing stored Gemini keys in `secret_keys.xml` under `api_key_gemini` remain untouched.
-- **Fallback:** If OpenCode Zen is selected but its API key is missing, `GrammarFixService` alerts the user via Toast ("OpenCode Zen API key missing — configure in WordWise").
+This is the part that actually needs care, since existing users have a working Gemini key and no OpenCode Zen key yet.
+
+- **On first launch post-update:** if a stored Gemini key exists (`api_key_gemini`) and no OpenCode Zen key exists, show a one-time in-app notice: *"WordWise now runs on a new, free, unlimited AI model. Your old Gemini key is no longer used — please add your OpenCode Zen key to continue using WordWise."* Link directly to the API key field.
+- **Do not silently fail:** if `GrammarFixService` runs with no OpenCode Zen key configured, it should surface the existing "API key missing" Toast/notification path (already built for the missing-key case) rather than a generic error.
+- **Cleanup:** delete the `api_key_gemini` entry from `EncryptedSharedPreferences` after showing the one-time migration notice (or on next successful save of an OpenCode Zen key) so stale key material doesn't linger. Delete the `selected_provider` and any Gemini-model prefs at the same time.
+- **No fallback to Gemini:** once removed, there is no code path back to Gemini. This is a one-way migration.
 
 ---
 
 ## 8. Testing & Verification Specification
 
-### 8.1 Unit Tests (`OpenCodeZenProviderTest.kt`)
-- `buildRequest_createsValidOpenAICompatiblePayload`: Verifies JSON structure contains `model: "big-pickle"`, system prompt, user prompt, and `Authorization: Bearer <key>` header.
-- `parseResponse_extractsContentFromChoices`: Verifies parsing of JSON `choices[0].message.content`.
-- `parseResponse_handlesHttp401And429`: Verifies mapping of 401 to failure and 429 to rate limit variant.
+### 8.1 Unit Tests (`AiClientTest.kt`)
+- `buildRequest_createsValidOpenAICompatiblePayload`: Verifies JSON contains `model: "big-pickle"`, system prompt, user prompt, and `Authorization: Bearer <key>` header.
+- `parseResponse_extractsContentFromChoices`: Verifies parsing of `choices[0].message.content`.
+- `parseResponse_handlesHttp401And429`: Verifies 401 → failure, 429 → rate-limited variant.
+- All existing Gemini-specific unit tests (payload shape, `candidates[0].content.parts[0].text` parsing, Gemini error mapping) are deleted, not left disabled.
 
 ### 8.2 Manual Verification Routine
-1. Select **OpenCode Zen** in WordWise Settings.
-2. Enter valid OpenCode Zen API key and save.
+1. Fresh install (or update from a Gemini-only build) — confirm the migration notice appears if an old Gemini key is present.
+2. Enter a valid OpenCode Zen API key and save.
 3. Open WhatsApp/Gmail, type `This is bad grammar?fix`.
-4. Verify inline spinner appears and text is replaced with corrected text via OpenCode Zen's `big-pickle` model.
+4. Verify inline spinner appears and text is replaced with corrected text via `big-pickle`.
+5. Remove/blank the API key and confirm the missing-key Toast still fires correctly.
+6. Confirm no UI element anywhere still references Gemini or a provider choice.
 
 ---
 
@@ -373,15 +297,15 @@ When OpenCode Zen is selected as the active provider:
 
 | File | Status | Description of Changes |
 |------|--------|------------------------|
-| `com/musa/wordwise/network/AiProvider.kt` | New File | Interface for AI providers and `ProviderType` sealed class |
-| `com/musa/wordwise/network/GeminiProvider.kt` | New File | Extracted Gemini provider implementation |
-| `com/musa/wordwise/network/OpenCodeZenProvider.kt` | New File | OpenCode Zen provider with hardcoded `big-pickle` model |
-| `com/musa/wordwise/network/AiClient.kt` | Modified | Refactored into dispatcher routing requests to active provider |
-| `com/musa/wordwise/data/ApiKeyRepository.kt` | Modified | Multi-key support (`api_key_gemini`, `api_key_opencode_zen`) |
-| `com/musa/wordwise/data/Prefs.kt` | Modified | Added `KEY_PROVIDER` getter/setter and defaults |
-| `com/musa/wordwise/server/WwServer.kt` | Modified | Added routes `/api/settings/provider`, `/api/key/opencode_zen` |
-| `com/musa/wordwise/server/Views.kt` | Modified | Provider selector UI, conditional model card for `big-pickle` |
-| `com/musa/wordwise/GrammarFixService.kt` | Modified | Read active provider and API key, delegate to `AiClient` |
-| `docs/ARCHITECTURE.md` | Modified | Document multi-provider architecture and OpenCode Zen |
+| `com/musa/wordwise/network/AiClient.kt` | Modified (rewritten) | Becomes the OpenCode Zen client directly — hardcoded endpoint, hardcoded `big-pickle` model, OpenAI-compatible payload + parser |
+| `com/musa/wordwise/network/*Gemini*` (payload builder/parser, wherever it lives) | **Deleted** | Gemini request/response logic removed entirely |
+| `com/musa/wordwise/network/AiProvider.kt` / `ProviderType.kt` | **Not created / deleted if present** | No interface or sealed class needed for a single provider |
+| `com/musa/wordwise/data/ApiKeyRepository.kt` | Modified | Single-key API (`api_key_opencode_zen`); Gemini key migration handled per §7, then old key removed |
+| `com/musa/wordwise/data/Prefs.kt` | Modified | `selected_provider` and Gemini model-selection prefs deleted |
+| `com/musa/wordwise/server/WwServer.kt` | Modified | `/api/settings/provider` and `/api/key/gemini` routes deleted; `/api/key/opencode_zen` retained |
+| `com/musa/wordwise/server/Views.kt` | Modified | Provider selector UI removed; single API key field + fixed `big-pickle` model badge |
+| `com/musa/wordwise/GrammarFixService.kt` | Modified | Reads the single API key and calls `AiClient` directly — no provider lookup |
+| `docs/ARCHITECTURE.md` | Modified | Documents the single-provider OpenCode Zen architecture; Gemini section removed or moved to a "history" note |
+| `res/xml/network_security_config.xml` (if applicable) | Modified | Remove Gemini domain allow-list entry once unused |
 
 ---

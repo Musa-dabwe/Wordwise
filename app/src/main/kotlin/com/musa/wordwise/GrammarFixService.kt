@@ -9,6 +9,7 @@
 package com.musa.wordwise
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,7 +19,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
-import com.musa.wordwise.data.Prefs
 import com.musa.wordwise.network.AiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -50,7 +50,28 @@ class GrammarFixService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "Service connected!")
+        showMigrationNoticeIfNeeded()
         showToast(getString(R.string.toast_service_ready))
+    }
+
+    /**
+     * One-time migration notice: if a legacy Gemini key exists but no
+     * OpenCode Zen key is configured, tell the user to add a new key.
+     * Shows once per install/update, then cleans up the old key.
+     */
+    private fun showMigrationNoticeIfNeeded() {
+        val prefs = getSharedPreferences("wordwise_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("migration_notice_shown", false)) return
+
+        if (apiKeyRepository.hasLegacyGeminiKey() && !apiKeyRepository.hasApiKey()) {
+            showToast(
+                "WordWise now uses a new free AI model (big-pickle). " +
+                "Your old Gemini key is no longer used — add your OpenCode Zen key in settings.",
+                long = true
+            )
+            prefs.edit().putBoolean("migration_notice_shown", true).apply()
+            apiKeyRepository.removeLegacyGeminiKey()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -89,6 +110,7 @@ class GrammarFixService : AccessibilityService() {
 
         val apiKey = apiKeyRepository.getApiKey()
         if (apiKey.isEmpty()) {
+            showMigrationNoticeIfNeeded()
             showToast(getString(R.string.toast_api_key_missing), long = true)
             source.safeRecycle()
             return
@@ -105,8 +127,7 @@ class GrammarFixService : AccessibilityService() {
                     showToast(getString(R.string.warning_large_text))
                 }
 
-                val model = Prefs.getSelectedModel(this@GrammarFixService)
-                val result = AiClient.fixGrammar(textToFix, apiKey, model)
+                val result = AiClient.fixGrammar(textToFix, apiKey)
 
                 stopSpinner(token)
 
