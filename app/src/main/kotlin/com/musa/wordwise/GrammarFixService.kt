@@ -35,7 +35,8 @@ class GrammarFixService : AccessibilityService() {
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
 
     private val shortcut = "?fix"
-    private val shortcutRegex = Regex("""\?fix$""")
+    private val shortcutRegex = Regex("""\?fix\s*$""")
+    private val askRegex = Regex("""\?ask\s*$""", RegexOption.IGNORE_CASE)
     private val LARGE_TEXT_THRESHOLD = 1000 // characters
 
     private val SPINNER_FRAMES = arrayOf("◴", "◷", "◶", "◵")
@@ -46,6 +47,11 @@ class GrammarFixService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var pendingJob: Job? = null
+
+    private sealed class Command {
+        data class Fix(val text: String) : Command()
+        data class Ask(val prompt: String) : Command()
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -178,6 +184,18 @@ class GrammarFixService : AccessibilityService() {
             typeVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
         ) || typeClass == InputType.TYPE_CLASS_NUMBER &&
             typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    }
+
+    private fun detectCommand(text: String): Command? {
+        return when {
+            shortcutRegex.containsMatchIn(text) -> Command.Fix(
+                text.replace(shortcutRegex, "").trim()
+            )
+            askRegex.containsMatchIn(text) -> Command.Ask(
+                text.replace(askRegex, "").trim()
+            )
+            else -> null
+        }
     }
 
     private fun replaceText(
