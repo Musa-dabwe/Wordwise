@@ -6,6 +6,11 @@ import org.junit.Test
 class AiClientTest {
 
     @Test
+    fun `MODEL is openrouter_free`() {
+        assertEquals("openrouter/free", AiClient.MODEL)
+    }
+
+    @Test
     fun `parseContent extracts text from valid OpenCode Zen JSON`() {
         val json = """{"choices":[{"message":{"content":"  Corrected text  "}}]}"""
         val result = AiClient.parseContent(json)
