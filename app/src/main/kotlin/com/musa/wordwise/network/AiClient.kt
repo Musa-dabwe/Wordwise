@@ -62,6 +62,13 @@ object AiClient {
         "Do not add any explanations, commentary, or quotation marks. " +
         "Never use em-dashes (—); use a comma, colon, or restructure the sentence instead."
 
+    private const val ASK_SYSTEM_PROMPT =
+        "You are a helpful, knowledgeable AI assistant. " +
+        "Follow the user's instructions precisely. " +
+        "Return only the result with no commentary, explanations, or quotation marks. " +
+        "Do not use Markdown or any other formatting — output must be plain text suitable for direct insertion into a text field. " +
+        "If the request is ambiguous, give your best interpretation."
+
     sealed class Result {
         data class Success(val text: String) : Result()
         data class RateLimited(val message: String) : Result()
@@ -87,6 +94,34 @@ object AiClient {
                     add(buildJsonObject {
                         put("role", "user")
                         put("content", text)
+                    })
+                })
+            }.toString()
+
+            val request = Request.Builder()
+                .url(ENDPOINT)
+                .header("Authorization", "Bearer $apiKey")
+                .header("Content-Type", "application/json")
+                .header("HTTP-Referer", HTTP_REFERER)
+                .header("X-Title", APP_TITLE)
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            executeRequest(request)
+        }
+
+    suspend fun ask(prompt: String, apiKey: String): Result =
+        withContext(Dispatchers.IO) {
+            val payload = buildJsonObject {
+                put("model", MODEL)
+                put("messages", buildJsonArray {
+                    add(buildJsonObject {
+                        put("role", "system")
+                        put("content", ASK_SYSTEM_PROMPT)
+                    })
+                    add(buildJsonObject {
+                        put("role", "user")
+                        put("content", prompt)
                     })
                 })
             }.toString()

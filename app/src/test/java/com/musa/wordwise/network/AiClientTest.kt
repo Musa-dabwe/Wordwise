@@ -43,4 +43,21 @@ class AiClientTest {
         val result = AiClient.parseContent(json)
         assertEquals("wrapped", result)
     }
+
+    @Test
+    fun `ASK_SYSTEM_PROMPT contains plain text constraint`() {
+        val field = AiClient::class.java.getDeclaredField("ASK_SYSTEM_PROMPT")
+        field.isAccessible = true
+        val prompt = field.get(null) as String
+        assert(prompt.contains("plain text"))
+        assert(prompt.contains("Markdown"))
+    }
+
+    @Test
+    fun `ASK_SYSTEM_PROMPT requests no commentary`() {
+        val field = AiClient::class.java.getDeclaredField("ASK_SYSTEM_PROMPT")
+        field.isAccessible = true
+        val prompt = field.get(null) as String
+        assert(prompt.contains("no commentary"))
+    }
 }
