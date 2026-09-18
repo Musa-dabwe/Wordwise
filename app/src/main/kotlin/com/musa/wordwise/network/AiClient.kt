@@ -23,11 +23,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Singleton AI client for OpenCode Zen.
+ * Singleton AI client for OpenRouter.
  *
  * OkHttpClient is shared across all calls to reuse the connection pool.
  * The API key is sent via the Authorization header — never in the URL —
@@ -36,12 +35,10 @@ import java.util.concurrent.TimeUnit
 object AiClient {
 
     private const val TAG = "AiClient"
-    const val MODEL = "big-pickle"
-    private const val ENDPOINT = "https://opencode.ai/zen/v1/chat/completions"
-
-    // Stable per-process session ID for OpenCode Zen free-tier routing.
-    // Server rejects free models without this header (MissingSessionID 400).
-    private val sessionId: String by lazy { UUID.randomUUID().toString() }
+    const val MODEL = "openrouter/free"
+    private const val ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+    private const val HTTP_REFERER = "https://github.com/musa-dabwe/WordWise"
+    private const val APP_TITLE = "WordWise"
 
     // 429 retry backoff delay in milliseconds.
     private const val RETRY_DELAY_MS = 3_000L
@@ -62,7 +59,8 @@ object AiClient {
         "You are a grammar and style correction assistant. " +
         "Return only the corrected text. " +
         "Preserve the original language and meaning exactly. " +
-        "Do not add any explanations, commentary, or quotation marks."
+        "Do not add any explanations, commentary, or quotation marks. " +
+        "Never use em-dashes (—); use a comma, colon, or restructure the sentence instead."
 
     sealed class Result {
         data class Success(val text: String) : Result()
@@ -71,7 +69,7 @@ object AiClient {
     }
 
     /**
-     * Sends [text] to OpenCode Zen for grammar and style correction.
+     * Sends [text] to OpenRouter for grammar and style correction.
      * Returns a [Result] — callers must handle all three cases.
      *
      * This function owns its own [withContext] switch. The call site in
@@ -97,7 +95,8 @@ object AiClient {
                 .url(ENDPOINT)
                 .header("Authorization", "Bearer $apiKey")
                 .header("Content-Type", "application/json")
-                .header("x-opencode-session", sessionId)
+                .header("HTTP-Referer", HTTP_REFERER)
+                .header("X-Title", APP_TITLE)
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -111,8 +110,8 @@ object AiClient {
                 when (response.code) {
                     200 -> parseContent(raw)
                         ?.let { Result.Success(it) }
-                        ?: Result.Failure("No content returned from OpenCode Zen")
-                    401, 403 -> Result.Failure("Invalid OpenCode Zen API key — check settings")
+                        ?: Result.Failure("No content returned from OpenRouter")
+                    401, 403 -> Result.Failure("Invalid OpenRouter API key — check settings")
                     429 -> {
                         rateLimitCount++
                         Log.w(TAG, "429 rate limit (occurrence #$rateLimitCount) — retrying in ${RETRY_DELAY_MS}ms")
@@ -123,21 +122,21 @@ object AiClient {
                             when (retry.code) {
                                 200 -> parseContent(retryRaw)
                                     ?.let { Result.Success(it) }
-                                    ?: Result.Failure("No content returned from OpenCode Zen")
+                                    ?: Result.Failure("No content returned from OpenRouter")
                                 429 -> {
                                     Log.w(TAG, "429 rate limit persisted after retry (total: $rateLimitCount)")
                                     Result.RateLimited("Correction busy — try again shortly")
                                 }
-                                else -> Result.Failure("OpenCode Zen error (HTTP ${retry.code}): $retryRaw")
+                                else -> Result.Failure("OpenRouter error (HTTP ${retry.code}): $retryRaw")
                             }
                         }
                     }
-                    in 500..599 -> Result.Failure("OpenCode Zen issue (HTTP ${response.code}) — try again")
-                    else -> Result.Failure("OpenCode Zen error (HTTP ${response.code}): $raw")
+                    in 500..599 -> Result.Failure("OpenRouter issue (HTTP ${response.code}) — try again")
+                    else -> Result.Failure("OpenRouter error (HTTP ${response.code}): $raw")
                 }
             }
         } catch (e: Exception) {
-            Result.Failure(e.message ?: "Network error connecting to OpenCode Zen")
+            Result.Failure(e.message ?: "Network error connecting to OpenRouter")
         }
     }
 
