@@ -31,16 +31,16 @@ object Views {
           <form hx-post="/api/key" hx-swap="none">
             <div class="ww-lab" style="margin-bottom:10px;">API KEY</div>
             <div class="key-wrap">
-              <input id="key-input" type="password" name="key" value="${esc(key)}" placeholder="Paste your OpenCode Zen API key here" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <input id="key-input" type="password" name="key" value="${esc(key)}" placeholder="Paste your OpenRouter API key here" autocomplete="off" autocapitalize="off" spellcheck="false">
               <button type="button" class="key-eye" onclick="wwToggleKey(this)">SHOW</button>
             </div>
-            <a class="key-link" href="https://opencode.ai">Get a free key at OpenCode Zen →</a>
+            <a class="key-link" href="https://openrouter.ai/keys" target="_blank">Get a free key at OpenRouter →</a>
             <button id="save-btn" type="submit" class="ww-save" style="margin-top:18px;">SAVE API KEY</button>
           </form>
 
           <div>
             <div class="ww-lab" style="margin-bottom:10px;">AI MODEL</div>
-            <div class="ww-model-badge" style="display:inline-block; padding:6px 14px; border-radius:8px; background:#f0f0f0; font-family:monospace; font-size:14px;">big-pickle — Free Model (OpenCode Zen)</div>
+            <div class="ww-model-badge" style="display:inline-block; padding:6px 14px; border-radius:8px; background:#f0f0f0; font-family:monospace; font-size:14px;">openrouter/free — Free Models Router (OpenRouter)</div>
           </div>
 
           <div>
@@ -87,13 +87,13 @@ object Views {
         <div class="screen" data-screen="about">
           <div class="md-body">
             <h1>WordWise</h1>
-            <p><strong>System-wide grammar correction for Android.</strong> Type <code>?fix</code> at the end of any text in any app and WordWise rewrites it using OpenCode Zen's free <code>big-pickle</code> model — no copy, no paste, no switching apps.</p>
+            <p><strong>System-wide grammar correction for Android.</strong> Type <code>?fix</code> at the end of any text in any app and WordWise rewrites it using OpenRouter's free models router — no copy, no paste, no switching apps.</p>
 
             <h2>How it works</h2>
             <p>WordWise runs as an Android <strong>Accessibility Service</strong>. When you type <code>?fix</code> after your text, it:</p>
             <ol>
               <li>Reads the surrounding text from the input field.</li>
-              <li>Sends it to the <strong>big-pickle</strong> model via OpenCode Zen with a strict correction prompt.</li>
+              <li>Sends it to <strong>OpenRouter</strong>'s free models with a strict correction prompt.</li>
               <li>Replaces the text in place — instantly, in any app.</li>
             </ol>
             <p>Password fields are always skipped.</p>
@@ -103,13 +103,13 @@ object Views {
               <li><strong>Frontend</strong> — <code>htmx</code> with server-rendered HTML, running in a native Android WebView.</li>
               <li><strong>Backend</strong> — embedded <strong>Ktor</strong> (CIO) server on-device, bound to localhost.</li>
               <li><strong>Language</strong> — <strong>Kotlin</strong>, front to back: the UI screens are rendered by the same Kotlin process that runs the accessibility service.</li>
-              <li><strong>AI</strong> — <strong>OpenCode Zen</strong> API with your own free key.</li>
+              <li><strong>AI</strong> — <strong>OpenRouter</strong> API with your own free key.</li>
             </ul>
 
             <h2>Security &amp; Privacy</h2>
             <ul>
-              <li><strong>Key at rest</strong> — your OpenCode Zen key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV).</li>
-              <li><strong>In transit</strong> — sent only to <code>opencode.ai</code> over TLS 1.3; cleartext traffic is blocked.</li>
+              <li><strong>Key at rest</strong> — your OpenRouter key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV).</li>
+              <li><strong>In transit</strong> — sent only to <code>openrouter.ai</code> over TLS; cleartext traffic is blocked.</li>
               <li><strong>No retention</strong> — text lives in memory only for the request. Never logged, cached, or stored.</li>
               <li><strong>Sensitive fields</strong> — password and web-password inputs are never read.</li>
               <li><strong>Backups excluded</strong> — the encrypted key store never leaves the device.</li>
