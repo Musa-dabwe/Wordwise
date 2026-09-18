@@ -55,22 +55,22 @@ class GrammarFixService : AccessibilityService() {
     }
 
     /**
-     * One-time migration notice: if a legacy Gemini key exists but no
-     * OpenCode Zen key is configured, tell the user to add a new key.
+     * One-time migration notice: if a legacy OpenCode Zen key exists but no
+     * OpenRouter key is configured, tell the user to add a new key.
      * Shows once per install/update, then cleans up the old key.
      */
     private fun showMigrationNoticeIfNeeded() {
         val prefs = getSharedPreferences("wordwise_prefs", Context.MODE_PRIVATE)
         if (prefs.getBoolean("migration_notice_shown", false)) return
 
-        if (apiKeyRepository.hasLegacyGeminiKey() && !apiKeyRepository.hasApiKey()) {
+        if (apiKeyRepository.hasLegacyZenKey() && !apiKeyRepository.hasApiKey()) {
             showToast(
-                "WordWise now uses a new free AI model (big-pickle). " +
-                "Your old Gemini key is no longer used — add your OpenCode Zen key in settings.",
+                "WordWise now uses OpenRouter. " +
+                "Your old OpenCode Zen key is no longer used — add your OpenRouter key in settings.",
                 long = true
             )
             prefs.edit().putBoolean("migration_notice_shown", true).apply()
-            apiKeyRepository.removeLegacyGeminiKey()
+            apiKeyRepository.removeLegacyZenKey()
         }
     }
 
