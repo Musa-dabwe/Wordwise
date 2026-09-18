@@ -11,7 +11,7 @@ class AiClientTest {
     }
 
     @Test
-    fun `parseContent extracts text from valid OpenCode Zen JSON`() {
+    fun `parseContent extracts text from valid JSON`() {
         val json = """{"choices":[{"message":{"content":"  Corrected text  "}}]}"""
         val result = AiClient.parseContent(json)
         assertEquals("Corrected text", result)

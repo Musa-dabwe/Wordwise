@@ -12,7 +12,7 @@ import android.content.Context
 
 /**
  * Non-secret app settings (theme) in plain SharedPreferences.
- * The OpenCode Zen API key lives in [ApiKeyRepository].
+ * The OpenRouter API key lives in [ApiKeyRepository].
  */
 object Prefs {
 
