@@ -1,3 +1,7 @@
+> **Historical Document:** This spec describes the OpenCode Zen integration that has since been replaced by OpenRouter. See `docs/superpowers/specs/2026-09-16-openrouter-migration-design.md` for the current provider specification.
+
+---
+
 # Specification: OpenCode Zen (`big-pickle`) as WordWise's Sole AI Provider
 
 **Document Status:** Revised — Full Replacement (not multi-provider)
