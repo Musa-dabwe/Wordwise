@@ -9,6 +9,8 @@
 package com.musa.wordwise
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
@@ -130,10 +132,11 @@ class GrammarFixService : AccessibilityService() {
 
         pendingJob = serviceScope.launch {
             try {
-                val wordCount = countWords(textForAi)
-
-                if (command is Command.Ask && wordCount > LARGE_TEXT_THRESHOLD_ASK_WORDS) {
-                    showToast(getString(R.string.warning_large_text_ask))
+                if (command is Command.Ask) {
+                    val wordCount = countWords(textForAi)
+                    if (wordCount > LARGE_TEXT_THRESHOLD_ASK_WORDS) {
+                        showToast(getString(R.string.warning_large_text_ask))
+                    }
                 } else if (command is Command.Fix && textForAi.length > LARGE_TEXT_THRESHOLD) {
                     showToast(getString(R.string.warning_large_text))
                 }
@@ -161,11 +164,15 @@ class GrammarFixService : AccessibilityService() {
 
                         if (unchanged || isEmpty) {
                             replaceText(source, textForAi)
-                            showToast(getString(R.string.toast_ask_unchanged), long = true)
+                            val unchangedToast = when (command) {
+                                is Command.Fix -> R.string.error_unchanged
+                                is Command.Ask -> R.string.toast_ask_unchanged
+                            }
+                            showToast(getString(unchangedToast), long = true)
                         } else {
                             if (command is Command.Ask) {
-                                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("WordWise prompt", textForAi)
+                                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("WordWise prompt", textForAi)
                                 clipboard.setPrimaryClip(clip)
                             }
                             replaceText(source, result.text)
