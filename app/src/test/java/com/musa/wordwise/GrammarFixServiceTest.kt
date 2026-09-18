@@ -116,4 +116,15 @@ class GrammarFixServiceTest {
     fun `word count handles punctuation`() {
         assertEquals(4, countWords("hello, world. foo! bar?"))
     }
+
+    @Test
+    fun `word count handles non-Latin text`() {
+        assertEquals(3, countWords("你好 世界 早上"))
+    }
+
+    @Test
+    fun `word count of long prompt exceeds threshold`() {
+        val words = List(10_001) { "word" }.joinToString(" ")
+        assertTrue(countWords(words) > 10_000)
+    }
 }

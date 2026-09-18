@@ -38,6 +38,7 @@ class GrammarFixService : AccessibilityService() {
     private val shortcutRegex = Regex("""\?fix\s*$""")
     private val askRegex = Regex("""\?ask\s*$""", RegexOption.IGNORE_CASE)
     private val LARGE_TEXT_THRESHOLD = 1000 // characters
+    private val LARGE_TEXT_THRESHOLD_ASK_WORDS = 10_000
 
     private val SPINNER_FRAMES = arrayOf("◴", "◷", "◶", "◵")
     private var spinnerRunnable: Runnable? = null
@@ -101,68 +102,99 @@ class GrammarFixService : AccessibilityService() {
             else -> null
         }
 
-        if (currentText == null || !shortcutRegex.containsMatchIn(currentText)) {
+        val command = currentText?.let { detectCommand(it) }
+        if (command == null) {
             source.safeRecycle()
             return
         }
 
-        val textToFix = currentText.dropLast(shortcut.length).trim()
+        val textForAi = when (command) {
+            is Command.Fix -> command.text
+            is Command.Ask -> command.prompt
+        }
 
-        if (textToFix.isEmpty()) {
-            showToast(getString(R.string.toast_no_text))
+        if (textForAi.isEmpty()) {
+            val toastRes = when (command) {
+                is Command.Fix -> R.string.toast_no_text
+                is Command.Ask -> R.string.toast_ask_no_text
+            }
+            showToast(getString(toastRes))
             source.safeRecycle()
             return
         }
 
-        val apiKey = apiKeyRepository.getApiKey()
-        if (apiKey.isEmpty()) {
-            showMigrationNoticeIfNeeded()
-            showToast(getString(R.string.toast_api_key_missing), long = true)
-            source.safeRecycle()
-            return
-        }
-
-        Log.d(TAG, "Shortcut '$shortcut' detected — ${textToFix.length} chars to fix")
+        Log.d(TAG, "Command detected — ${textForAi.length} chars to process")
 
         pendingJob?.cancel()
-        val token = startSpinner(textToFix, source)
+        val token = startSpinner(textForAi, source)
 
         pendingJob = serviceScope.launch {
             try {
-                if (textToFix.length > LARGE_TEXT_THRESHOLD) {
+                val wordCount = countWords(textForAi)
+
+                if (command is Command.Ask && wordCount > LARGE_TEXT_THRESHOLD_ASK_WORDS) {
+                    showToast(getString(R.string.warning_large_text_ask))
+                } else if (command is Command.Fix && textForAi.length > LARGE_TEXT_THRESHOLD) {
                     showToast(getString(R.string.warning_large_text))
                 }
 
-                val result = AiClient.fixGrammar(textToFix, apiKey)
+                val apiKey = apiKeyRepository.getApiKey()
+                if (apiKey.isEmpty()) {
+                    showMigrationNoticeIfNeeded()
+                    showToast(getString(R.string.toast_api_key_missing), long = true)
+                    stopSpinner(token)
+                    source.safeRecycle()
+                    return@launch
+                }
+
+                val result = when (command) {
+                    is Command.Fix -> AiClient.fixGrammar(textForAi, apiKey)
+                    is Command.Ask -> AiClient.ask(textForAi, apiKey)
+                }
 
                 stopSpinner(token)
 
                 when (result) {
                     is AiClient.Result.Success -> {
-                        if (result.text != textToFix) {
-                            replaceText(source, result.text)
-                            showToast(getString(R.string.toast_fixed))
+                        val unchanged = result.text == textForAi
+                        val isEmpty = result.text.isBlank()
+
+                        if (unchanged || isEmpty) {
+                            replaceText(source, textForAi)
+                            showToast(getString(R.string.toast_ask_unchanged), long = true)
                         } else {
-                            replaceText(source, textToFix)
-                            showToast(getString(R.string.error_unchanged), long = true)
+                            if (command is Command.Ask) {
+                                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("WordWise prompt", textForAi)
+                                clipboard.setPrimaryClip(clip)
+                            }
+                            replaceText(source, result.text)
+                            val toastRes = when (command) {
+                                is Command.Fix -> R.string.toast_fixed
+                                is Command.Ask -> R.string.toast_ask_done
+                            }
+                            showToast(getString(toastRes))
                         }
                     }
                     is AiClient.Result.RateLimited -> {
-                        replaceText(source, textToFix)
+                        replaceText(source, textForAi)
                         showToast(result.message, long = true)
                     }
                     is AiClient.Result.Failure -> {
-                        replaceText(source, textToFix)
-                        showToast(getString(R.string.error_correction_failed, result.error), long = true)
+                        replaceText(source, textForAi)
+                        val errorRes = when (command) {
+                            is Command.Fix -> R.string.error_correction_failed
+                            is Command.Ask -> R.string.error_ask_failed
+                        }
+                        showToast(getString(errorRes, result.error), long = true)
                     }
                 }
             } catch (e: CancellationException) {
-                // A newer ?fix superseded this job — it owns the field now.
                 throw e
             } catch (e: Exception) {
                 stopSpinner(token)
-                replaceText(source, textToFix)
-                Log.e(TAG, "Error fixing grammar: ${e.message}", e)
+                replaceText(source, textForAi)
+                Log.e(TAG, "Error processing command: ${e.message}", e)
                 showToast(getString(R.string.error_correction_failed, e.message ?: "unknown"), long = true)
             } finally {
                 stopSpinner(token)
@@ -197,6 +229,9 @@ class GrammarFixService : AccessibilityService() {
             else -> null
         }
     }
+
+    private fun countWords(text: String): Int =
+        text.split(Regex("\\s+")).filter { it.isNotEmpty() }.size
 
     private fun replaceText(
         node: AccessibilityNodeInfo,
