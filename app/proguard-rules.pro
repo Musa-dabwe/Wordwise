@@ -31,3 +31,6 @@
 # Preserve stack traces in release
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Tink / errorprone annotations (referenced by EncryptedSharedPreferences)
+-dontwarn com.google.errorprone.annotations.**

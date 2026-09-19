@@ -1,8 +1,15 @@
 
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
+}
+
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("/home/musa/Projects/keys/wordwise-release.properties")
+    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -15,8 +22,8 @@ android {
         // Ktor's server engines need API 26+; matches PoetMusic.
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "3.0"
+        versionCode = 1
+        versionName = "1.0.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -30,10 +37,20 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(keystoreProps.getProperty("storeFile", ""))
+            storePassword = keystoreProps.getProperty("storePassword", "")
+            keyAlias = keystoreProps.getProperty("keyAlias", "")
+            keyPassword = keystoreProps.getProperty("keyPassword", "")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
