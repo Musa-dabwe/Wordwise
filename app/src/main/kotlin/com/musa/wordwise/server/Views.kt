@@ -87,12 +87,12 @@ object Views {
         <div class="screen" data-screen="about">
           <div class="md-body">
             <h1>WordWise</h1>
-            <p><strong>System-wide grammar assistant and AI helper for Android.</strong> Type <code>?fix</code> to correct grammar or <code>?ask</code> to ask AI anything — right from any app, no copy-paste needed.</p>
+            <p><strong>System-wide grammar assistant and AI helper for Android.</strong> Type <code>?fix</code> to correct grammar or <code>?ask</code> to ask AI anything, right from any app, no copy-paste needed.</p>
 
             <h2>Commands</h2>
             <ul>
-              <li><code>?fix</code> — Correct grammar, spelling, and style in-place.</li>
-              <li><code>?ask</code> — Ask AI anything about your text and get a response.</li>
+              <li><code>?fix</code> - Correct grammar, spelling, and style in-place.</li>
+              <li><code>?ask</code> - Ask AI anything about your text and get a response.</li>
             </ul>
 
             <h2>How it works</h2>
