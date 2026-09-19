@@ -9,9 +9,17 @@
     <string name="toast_service_ready">WordWise is ready! Type ?fix at the end of your text.</string>
     <string name="toast_fixed">✓ Fixed!</string>
     <string name="toast_no_text">No text found to fix</string>
-    <string name="toast_api_key_missing">Add your Gemini API key in WordWise first</string>
+    <string name="toast_api_key_missing">Add your OpenRouter API key in WordWise first</string>
     <string name="error_unchanged">No corrections needed — text looks good</string>
     <string name="error_correction_failed">Correction failed: %1$s</string>
     <string name="error_replace_failed">Could not replace text in this field. Try a standard text input field.</string>
-    <string name="warning_large_text">Large text detected — this may use more of your free quota</string>
+    <string name="warning_large_text">Large text detected — this may take longer to correct</string>
+
+    <!-- ?ask command -->
+    <string name="toast_ask_processing">Asking AI\u2026</string>
+    <string name="toast_ask_done">\u2713 Answered!</string>
+    <string name="toast_ask_no_text">Type a question before ?ask</string>
+    <string name="toast_ask_unchanged">No response generated</string>
+    <string name="warning_large_text_ask">Long prompt \u2014 response may be slow</string>
+    <string name="error_ask_failed">Ask failed: %1$s</string>
 </resources>

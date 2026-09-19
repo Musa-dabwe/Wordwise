@@ -41,15 +41,24 @@ class ApiKeyRepository(private val context: Context) {
     }
 
     fun saveApiKey(key: String) {
-        prefs.edit().putString(KEY_API_KEY_GEMINI, key).apply()
+        prefs.edit().putString(KEY_API_KEY, key).apply()
     }
 
     fun getApiKey(): String {
-        return prefs.getString(KEY_API_KEY_GEMINI, "") ?: ""
+        return prefs.getString(KEY_API_KEY, "") ?: ""
+    }
+
+    fun hasApiKey(): Boolean = getApiKey().isNotBlank()
+
+    fun hasLegacyZenKey(): Boolean = prefs.contains(KEY_LEGACY_ZEN)
+
+    fun removeLegacyZenKey() {
+        prefs.edit().remove(KEY_LEGACY_ZEN).apply()
     }
 
     companion object {
         private const val PREFS_NAME = "secret_keys"
-        private const val KEY_API_KEY_GEMINI = "api_key_gemini"
+        private const val KEY_API_KEY = "api_key_openrouter"
+        private const val KEY_LEGACY_ZEN = "api_key_opencode_zen"
     }
 }

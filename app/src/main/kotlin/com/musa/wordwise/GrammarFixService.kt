@@ -9,6 +9,9 @@
 package com.musa.wordwise
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,7 +21,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
-import com.musa.wordwise.data.Prefs
 import com.musa.wordwise.network.AiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -35,8 +37,10 @@ class GrammarFixService : AccessibilityService() {
     private val apiKeyRepository by lazy { ApiKeyRepository(this) }
 
     private val shortcut = "?fix"
-    private val shortcutRegex = Regex("""\?fix$""")
+    private val shortcutRegex = Regex("""\?fix\s*$""")
+    private val askRegex = Regex("""\?ask\s*$""", RegexOption.IGNORE_CASE)
     private val LARGE_TEXT_THRESHOLD = 1000 // characters
+    private val LARGE_TEXT_THRESHOLD_ASK_WORDS = 10_000
 
     private val SPINNER_FRAMES = arrayOf("◴", "◷", "◶", "◵")
     private var spinnerRunnable: Runnable? = null
@@ -44,13 +48,39 @@ class GrammarFixService : AccessibilityService() {
     private var spinnerToken = 0
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var pendingJob: Job? = null
+    internal val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    internal var pendingJob: Job? = null
+
+    private sealed class Command {
+        data class Fix(val text: String) : Command()
+        data class Ask(val prompt: String) : Command()
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "Service connected!")
+        showMigrationNoticeIfNeeded()
         showToast(getString(R.string.toast_service_ready))
+    }
+
+    /**
+     * One-time migration notice: if a legacy OpenCode Zen key exists but no
+     * OpenRouter key is configured, tell the user to add a new key.
+     * Shows once per install/update, then cleans up the old key.
+     */
+    private fun showMigrationNoticeIfNeeded() {
+        val prefs = getSharedPreferences("wordwise_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("migration_notice_shown", false)) return
+
+        if (apiKeyRepository.hasLegacyZenKey() && !apiKeyRepository.hasApiKey()) {
+            showToast(
+                "WordWise now uses OpenRouter. " +
+                "Your old OpenCode Zen key is no longer used — add your OpenRouter key in settings.",
+                long = true
+            )
+            prefs.edit().putBoolean("migration_notice_shown", true).apply()
+            apiKeyRepository.removeLegacyZenKey()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -74,68 +104,104 @@ class GrammarFixService : AccessibilityService() {
             else -> null
         }
 
-        if (currentText == null || !shortcutRegex.containsMatchIn(currentText)) {
+        val command = currentText?.let { detectCommand(it) }
+        if (command == null) {
             source.safeRecycle()
             return
         }
 
-        val textToFix = currentText.dropLast(shortcut.length).trim()
+        val textForAi = when (command) {
+            is Command.Fix -> command.text
+            is Command.Ask -> command.prompt
+        }
 
-        if (textToFix.isEmpty()) {
-            showToast(getString(R.string.toast_no_text))
+        if (textForAi.isEmpty()) {
+            val toastRes = when (command) {
+                is Command.Fix -> R.string.toast_no_text
+                is Command.Ask -> R.string.toast_ask_no_text
+            }
+            showToast(getString(toastRes))
             source.safeRecycle()
             return
         }
 
-        val apiKey = apiKeyRepository.getApiKey()
-        if (apiKey.isEmpty()) {
-            showToast(getString(R.string.toast_api_key_missing), long = true)
-            source.safeRecycle()
-            return
-        }
-
-        Log.d(TAG, "Shortcut '$shortcut' detected — ${textToFix.length} chars to fix")
+        Log.d(TAG, "Command detected — ${textForAi.length} chars to process")
 
         pendingJob?.cancel()
-        val token = startSpinner(textToFix, source)
+        val token = startSpinner(textForAi, source)
 
         pendingJob = serviceScope.launch {
             try {
-                if (textToFix.length > LARGE_TEXT_THRESHOLD) {
+                if (command is Command.Ask) {
+                    val wordCount = countWords(textForAi)
+                    if (wordCount > LARGE_TEXT_THRESHOLD_ASK_WORDS) {
+                        showToast(getString(R.string.warning_large_text_ask))
+                    }
+                } else if (command is Command.Fix && textForAi.length > LARGE_TEXT_THRESHOLD) {
                     showToast(getString(R.string.warning_large_text))
                 }
 
-                val model = Prefs.getSelectedModel(this@GrammarFixService)
-                val result = AiClient.fixGrammar(textToFix, apiKey, model)
+                val apiKey = apiKeyRepository.getApiKey()
+                if (apiKey.isEmpty()) {
+                    showMigrationNoticeIfNeeded()
+                    showToast(getString(R.string.toast_api_key_missing), long = true)
+                    stopSpinner(token)
+                    source.safeRecycle()
+                    return@launch
+                }
+
+                val result = when (command) {
+                    is Command.Fix -> AiClient.fixGrammar(textForAi, apiKey)
+                    is Command.Ask -> AiClient.ask(textForAi, apiKey)
+                }
 
                 stopSpinner(token)
 
                 when (result) {
                     is AiClient.Result.Success -> {
-                        if (result.text != textToFix) {
-                            replaceText(source, result.text)
-                            showToast(getString(R.string.toast_fixed))
+                        val unchanged = result.text == textForAi
+                        val isEmpty = result.text.isBlank()
+
+                        if (unchanged || isEmpty) {
+                            replaceText(source, textForAi)
+                            val unchangedToast = when (command) {
+                                is Command.Fix -> R.string.error_unchanged
+                                is Command.Ask -> R.string.toast_ask_unchanged
+                            }
+                            showToast(getString(unchangedToast), long = true)
                         } else {
-                            replaceText(source, textToFix)
-                            showToast(getString(R.string.error_unchanged), long = true)
+                            if (command is Command.Ask) {
+                                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("WordWise prompt", textForAi)
+                                clipboard.setPrimaryClip(clip)
+                            }
+                            replaceText(source, result.text)
+                            val toastRes = when (command) {
+                                is Command.Fix -> R.string.toast_fixed
+                                is Command.Ask -> R.string.toast_ask_done
+                            }
+                            showToast(getString(toastRes))
                         }
                     }
                     is AiClient.Result.RateLimited -> {
-                        replaceText(source, textToFix)
+                        replaceText(source, textForAi)
                         showToast(result.message, long = true)
                     }
                     is AiClient.Result.Failure -> {
-                        replaceText(source, textToFix)
-                        showToast(getString(R.string.error_correction_failed, result.error), long = true)
+                        replaceText(source, textForAi)
+                        val errorRes = when (command) {
+                            is Command.Fix -> R.string.error_correction_failed
+                            is Command.Ask -> R.string.error_ask_failed
+                        }
+                        showToast(getString(errorRes, result.error), long = true)
                     }
                 }
             } catch (e: CancellationException) {
-                // A newer ?fix superseded this job — it owns the field now.
                 throw e
             } catch (e: Exception) {
                 stopSpinner(token)
-                replaceText(source, textToFix)
-                Log.e(TAG, "Error fixing grammar: ${e.message}", e)
+                replaceText(source, textForAi)
+                Log.e(TAG, "Error processing command: ${e.message}", e)
                 showToast(getString(R.string.error_correction_failed, e.message ?: "unknown"), long = true)
             } finally {
                 stopSpinner(token)
@@ -144,20 +210,42 @@ class GrammarFixService : AccessibilityService() {
         }
     }
 
-    private fun isSensitiveField(node: AccessibilityNodeInfo): Boolean {
-        if (node.isPassword) return true
-
-        val inputType = node.inputType
-        val typeClass = inputType and InputType.TYPE_MASK_CLASS
-        val typeVariation = inputType and InputType.TYPE_MASK_VARIATION
-
-        return typeClass == InputType.TYPE_CLASS_TEXT && (
-            typeVariation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-            typeVariation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-            typeVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-        ) || typeClass == InputType.TYPE_CLASS_NUMBER &&
-            typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    internal fun isSensitiveField(node: AccessibilityNodeInfo): Boolean {
+        return isSensitiveInput(node.isPassword, node.inputType)
     }
+
+    companion object {
+        const val TAG = "GrammarFix"
+
+        fun isSensitiveInput(isPassword: Boolean, inputType: Int): Boolean {
+            if (isPassword) return true
+
+            val typeClass = inputType and InputType.TYPE_MASK_CLASS
+            val typeVariation = inputType and InputType.TYPE_MASK_VARIATION
+
+            return typeClass == InputType.TYPE_CLASS_TEXT && (
+                typeVariation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                typeVariation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                typeVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            ) || typeClass == InputType.TYPE_CLASS_NUMBER &&
+                typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
+    }
+
+    private fun detectCommand(text: String): Command? {
+        return when {
+            shortcutRegex.containsMatchIn(text) -> Command.Fix(
+                text.replace(shortcutRegex, "").trim()
+            )
+            askRegex.containsMatchIn(text) -> Command.Ask(
+                text.replace(askRegex, "").trim()
+            )
+            else -> null
+        }
+    }
+
+    private fun countWords(text: String): Int =
+        text.split(Regex("\\s+")).filter { it.isNotEmpty() }.size
 
     private fun replaceText(
         node: AccessibilityNodeInfo,
@@ -240,7 +328,4 @@ class GrammarFixService : AccessibilityService() {
         spinnerNode = null
     }
 
-    private companion object {
-        const val TAG = "GrammarFix"
-    }
 }

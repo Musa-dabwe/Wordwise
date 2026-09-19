@@ -172,7 +172,7 @@ a { color:var(--accsolid); text-decoration:none; }
     <div class="hdr-logo">✦</div>
     <div style="flex:1; min-width:0;">
       <div class="hdr-name">WordWise</div>
-      <div class="hdr-sub">Grammar correction, system-wide</div>
+      <div class="hdr-sub">System wide grammar assistant</div>
     </div>
   </div>
 
