@@ -48,8 +48,8 @@ class GrammarFixService : AccessibilityService() {
     private var spinnerToken = 0
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var pendingJob: Job? = null
+    internal val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    internal var pendingJob: Job? = null
 
     private sealed class Command {
         data class Fix(val text: String) : Command()
@@ -210,19 +210,26 @@ class GrammarFixService : AccessibilityService() {
         }
     }
 
-    private fun isSensitiveField(node: AccessibilityNodeInfo): Boolean {
-        if (node.isPassword) return true
+    internal fun isSensitiveField(node: AccessibilityNodeInfo): Boolean {
+        return isSensitiveInput(node.isPassword, node.inputType)
+    }
 
-        val inputType = node.inputType
-        val typeClass = inputType and InputType.TYPE_MASK_CLASS
-        val typeVariation = inputType and InputType.TYPE_MASK_VARIATION
+    companion object {
+        const val TAG = "GrammarFix"
 
-        return typeClass == InputType.TYPE_CLASS_TEXT && (
-            typeVariation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-            typeVariation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-            typeVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-        ) || typeClass == InputType.TYPE_CLASS_NUMBER &&
-            typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        fun isSensitiveInput(isPassword: Boolean, inputType: Int): Boolean {
+            if (isPassword) return true
+
+            val typeClass = inputType and InputType.TYPE_MASK_CLASS
+            val typeVariation = inputType and InputType.TYPE_MASK_VARIATION
+
+            return typeClass == InputType.TYPE_CLASS_TEXT && (
+                typeVariation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                typeVariation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                typeVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            ) || typeClass == InputType.TYPE_CLASS_NUMBER &&
+                typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
     }
 
     private fun detectCommand(text: String): Command? {
@@ -321,7 +328,4 @@ class GrammarFixService : AccessibilityService() {
         spinnerNode = null
     }
 
-    private companion object {
-        const val TAG = "GrammarFix"
-    }
 }
