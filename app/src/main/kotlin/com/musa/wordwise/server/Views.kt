@@ -34,13 +34,13 @@ object Views {
               <input id="key-input" type="password" name="key" value="${esc(key)}" placeholder="Paste your OpenRouter API key here" autocomplete="off" autocapitalize="off" spellcheck="false">
               <button type="button" class="key-eye" onclick="wwToggleKey(this)">SHOW</button>
             </div>
-            <a class="key-link" href="https://openrouter.ai/keys" target="_blank">Get a free key at OpenRouter →</a>
+            <a class="key-link" href="https://openrouter.ai/keys" target="_blank">Get a free key at OpenRouter</a>
             <button id="save-btn" type="submit" class="ww-save" style="margin-top:18px;">SAVE API KEY</button>
           </form>
 
           <div>
             <div class="ww-lab" style="margin-bottom:10px;">AI MODEL</div>
-            <div class="ww-model-badge" style="display:inline-block; padding:6px 14px; border-radius:8px; background:#f0f0f0; font-family:monospace; font-size:14px;">openrouter/free — Free Models Router (OpenRouter)</div>
+            <div class="ww-model-badge" style="display:inline-block; padding:6px 14px; border-radius:8px; background:#f0f0f0; font-family:monospace; font-size:14px;">Openrouter - Free Models Router</div>
           </div>
 
           <div>
@@ -52,8 +52,8 @@ object Views {
             <div class="ww-lab" style="margin-bottom:14px;">HOW TO USE</div>
             <div style="display:flex; flex-direction:column; gap:14px;">
               <div class="step"><div class="step-num">1</div><div class="step-txt">Type your text in any app (WhatsApp, Gmail, etc.)</div></div>
-              <div class="step"><div class="step-num">2</div><div class="step-txt">Add <code>?fix</code> at the end of your text</div></div>
-              <div class="step"><div class="step-num">3</div><div class="step-txt">WordWise replaces it with the corrected text</div></div>
+              <div class="step"><div class="step-num">2</div><div class="step-txt">Add <code>?fix</code> to correct grammar, or <code>?ask</code> to ask AI anything</div></div>
+              <div class="step"><div class="step-num">3</div><div class="step-txt">WordWise replaces it with the result</div></div>
             </div>
           </div>
         </div>"""
@@ -87,13 +87,19 @@ object Views {
         <div class="screen" data-screen="about">
           <div class="md-body">
             <h1>WordWise</h1>
-            <p><strong>System-wide grammar correction for Android.</strong> Type <code>?fix</code> at the end of any text in any app and WordWise rewrites it using OpenRouter's free models router — no copy, no paste, no switching apps.</p>
+            <p><strong>System-wide grammar assistant and AI helper for Android.</strong> Type <code>?fix</code> to correct grammar or <code>?ask</code> to ask AI anything — right from any app, no copy-paste needed.</p>
+
+            <h2>Commands</h2>
+            <ul>
+              <li><code>?fix</code> — Correct grammar, spelling, and style in-place.</li>
+              <li><code>?ask</code> — Ask AI anything about your text and get a response.</li>
+            </ul>
 
             <h2>How it works</h2>
-            <p>WordWise runs as an Android <strong>Accessibility Service</strong>. When you type <code>?fix</code> after your text, it:</p>
+            <p>WordWise runs as an Android <strong>Accessibility Service</strong>. When you type a command after your text, it:</p>
             <ol>
               <li>Reads the surrounding text from the input field.</li>
-              <li>Sends it to <strong>OpenRouter</strong>'s free models with a strict correction prompt.</li>
+              <li>Sends it to <strong>OpenRouter</strong>'s free models with the appropriate prompt.</li>
               <li>Replaces the text in place — instantly, in any app.</li>
             </ol>
             <p>Password fields are always skipped.</p>
