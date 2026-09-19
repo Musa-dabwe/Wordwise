@@ -100,25 +100,25 @@ object Views {
             <ol>
               <li>Reads the surrounding text from the input field.</li>
               <li>Sends it to <strong>OpenRouter</strong>'s free models with the appropriate prompt.</li>
-              <li>Replaces the text in place — instantly, in any app.</li>
+              <li>Replaces the text in place, instantly, in any app.</li>
             </ol>
             <p>Password fields are always skipped.</p>
 
             <h2>Tech Stack</h2>
             <ul>
-              <li><strong>Frontend</strong> — <code>htmx</code> with server-rendered HTML, running in a native Android WebView.</li>
-              <li><strong>Backend</strong> — embedded <strong>Ktor</strong> (CIO) server on-device, bound to localhost.</li>
-              <li><strong>Language</strong> — <strong>Kotlin</strong>, front to back: the UI screens are rendered by the same Kotlin process that runs the accessibility service.</li>
-              <li><strong>AI</strong> — <strong>OpenRouter</strong> API with your own free key.</li>
+              <li><strong>Frontend</strong> - <code>htmx</code> with server-rendered HTML, running in a native Android WebView.</li>
+              <li><strong>Backend</strong> - embedded <strong>Ktor</strong> (CIO) server on-device, bound to localhost.</li>
+              <li><strong>Language</strong> - <strong>Kotlin</strong>, front to back: the UI screens are rendered by the same Kotlin process that runs the accessibility service.</li>
+              <li><strong>AI</strong> - <strong>OpenRouter</strong> API with your own free key.</li>
             </ul>
 
             <h2>Security &amp; Privacy</h2>
             <ul>
-              <li><strong>Key at rest</strong> — your OpenRouter key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV).</li>
-              <li><strong>In transit</strong> — sent only to <code>openrouter.ai</code> over TLS; cleartext traffic is blocked.</li>
-              <li><strong>No retention</strong> — text lives in memory only for the request. Never logged, cached, or stored.</li>
-              <li><strong>Sensitive fields</strong> — password and web-password inputs are never read.</li>
-              <li><strong>Backups excluded</strong> — the encrypted key store never leaves the device.</li>
+              <li><strong>Key at rest</strong> - your OpenRouter key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV).</li>
+              <li><strong>In transit</strong> - sent only to <code>openrouter.ai</code> over TLS; cleartext traffic is blocked.</li>
+              <li><strong>No retention</strong> - text lives in memory only for the request. Never logged, cached, or stored.</li>
+              <li><strong>Sensitive fields</strong> - password and web-password inputs are never read.</li>
+              <li><strong>Backups excluded</strong> - the encrypted key store never leaves the device.</li>
             </ul>
             <blockquote><p>WordWise does <strong>not</strong> protect against a rooted device or other malicious accessibility services.</p></blockquote>
 
