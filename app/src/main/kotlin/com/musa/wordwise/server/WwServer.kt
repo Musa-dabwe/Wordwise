@@ -10,9 +10,13 @@ package com.musa.wordwise.server
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityManager
 import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.data.Prefs
+import com.musa.wordwise.network.ModelCatalog
+import com.musa.wordwise.network.ModelId
+import com.musa.wordwise.network.ModelInfo
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -28,6 +32,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.util.pipeline.PipelineContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Embedded Ktor server bound to the app process on localhost.
@@ -42,6 +48,62 @@ object WwServer {
     @Volatile var accessibilitySettingsRequester: (() -> Unit)? = null
 
     private var started = false
+
+    /**
+     * In-memory catalog cache.
+     *
+     * The picker is opened from the settings screen, so without this a user
+     * browsing themes would re-hit OpenRouter on every tap. The catalog changes
+     * rarely, so an hour-old list beats a spinner.
+     *
+     * Guarded by [catalogLock] because this is a check-then-act: without it,
+     * N concurrent requests on a cold cache each fire their own authenticated
+     * 762 KB fetch. The negative TTL is deliberately short so a single
+     * transient network failure does not suppress the picker for an hour.
+     */
+    private val catalogLock = Mutex()
+    private var cachedModels: List<ModelInfo> = emptyList()
+    private var cachedAt = 0L
+    private var cachedForKey = ""
+    private var negativeUntil = 0L
+    private const val CATALOG_TTL_MS = 60L * 60L * 1000L
+    private const val CATALOG_NEGATIVE_TTL_MS = 60_000L
+
+    private suspend fun modelsOrFetch(apiKey: String): List<ModelInfo> {
+        val fresh = freshCatalog(apiKey)
+        if (fresh != null) return fresh
+
+        return catalogLock.withLock {
+            // Re-check inside the lock: another coroutine may have just filled it.
+            freshCatalog(apiKey)?.let { return@withLock it }
+
+            val now = SystemClock.elapsedRealtime()
+            if (now < negativeUntil) return@withLock emptyList()
+
+            val fetched = ModelCatalog.fetch(apiKey).orEmpty()
+            if (fetched.isNotEmpty()) {
+                cachedModels = fetched
+                cachedAt = now
+                cachedForKey = apiKey
+                negativeUntil = 0L
+            } else {
+                negativeUntil = now + CATALOG_NEGATIVE_TTL_MS
+            }
+            fetched
+        }
+    }
+
+    /**
+     * Returns the cached catalog if it is still valid *for this API key*, else
+     * null. Scoped by key because OpenRouter filters the catalog by plan, so a
+     * cache warmed with one key must not be served after `/api/key` changes it.
+     */
+    private fun freshCatalog(apiKey: String): List<ModelInfo>? =
+        cachedModels.takeIf {
+            it.isNotEmpty() &&
+                cachedForKey == apiKey &&
+                SystemClock.elapsedRealtime() - cachedAt < CATALOG_TTL_MS
+        }
 
     private fun isServiceEnabled(context: Context): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
@@ -133,6 +195,38 @@ object WwServer {
                     val name = call.receiveParameters()["name"] ?: return@post noContent()
                     if (name in Themes.KEYS) Prefs.setTheme(app, name)
                     noContent()
+                }
+
+                // ---------- model ----------
+
+                post("/api/settings/model") {
+                    val raw = call.receiveParameters()["model"]?.trim().orEmpty()
+                    when (val result = ModelId.validate(raw)) {
+                        is ModelId.Result.Valid -> {
+                            Prefs.setModel(app, result)
+                            call.response.header(
+                                "HX-Trigger",
+                                """{"ww-toast":"Model saved","ww-model-saved":"${jsonStr(result.modelId)}"}"""
+                            )
+                            call.respond(HttpStatusCode.NoContent)
+                        }
+                        // Reject rather than store: a typo that silently fell back
+                        // to the free router would look like the save worked.
+                        is ModelId.Result.Invalid -> toast(result.reason)
+                    }
+                }
+
+                get("/api/models") {
+                    val models = modelsOrFetch(apiKeyRepository.getApiKey())
+                    if (models.isEmpty()) {
+                        // 503 rather than 204: this route is consumed by fetch(),
+                        // not htmx, so a 204 with no body would look like success
+                        // and fail later at r.json(). The client renders its own
+                        // note, and the paste field still works.
+                        call.respond(HttpStatusCode.ServiceUnavailable, "[]")
+                    } else {
+                        call.respondText(ModelCatalog.toJson(models), ContentType.Application.Json)
+                    }
                 }
             }
         }.start(wait = false)

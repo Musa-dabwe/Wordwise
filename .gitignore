@@ -8,3 +8,7 @@
 *.iws
 *.iml
 *.ipr
+
+# Local tooling / generated media (not source)
+/.opencode/node_modules
+/brag-output

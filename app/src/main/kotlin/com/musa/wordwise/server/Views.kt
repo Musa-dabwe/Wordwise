@@ -10,6 +10,7 @@ package com.musa.wordwise.server
 
 import android.content.Context
 import com.musa.wordwise.data.Prefs
+import com.musa.wordwise.network.ModelId
 
 /** Server-rendered htmx screens in the WordWise pastel design system. */
 object Views {
@@ -17,6 +18,7 @@ object Views {
     // ---------------- settings (home) ----------------
 
     fun homeScreen(context: Context, serviceEnabled: Boolean, key: String): String {
+        val currentModel = Prefs.getModel(context)
         return """
         <div class="screen" data-screen="home" style="display:flex; flex-direction:column; gap:24px;">
 
@@ -40,7 +42,7 @@ object Views {
 
           <div>
             <div class="ww-lab" style="margin-bottom:10px;">AI MODEL</div>
-            <div class="ww-model-badge" style="display:inline-block; padding:6px 14px; border-radius:8px; background:#f0f0f0; font-family:monospace; font-size:14px;">Openrouter - Free Models Router</div>
+            ${modelPicker(currentModel)}
           </div>
 
           <div>
@@ -80,6 +82,48 @@ object Views {
         </div>"""
     }
 
+    /**
+     * Model dropdown + paste field.
+     *
+     * Neither control writes anything by itself: picking a row or typing a path
+     * only fills the field, and the single SAVE MODEL submit persists it. That
+     * keeps one code path for the user's intent, so a half-finished edit is
+     * never silently applied, and makes the paste field the authoritative value.
+     */
+    private fun modelPicker(currentModel: String): String {
+        return """
+        <div id="model-card">
+          <div id="model-drop" class="ww-drop">
+            <button type="button" class="ww-sel" onclick="wwToggleDrop('model-drop')">
+              <span class="ww-selv"><span id="model-label" class="val">${esc(labelFor(currentModel))}</span></span>
+              <span class="ww-chev">▾</span>
+            </button>
+            <div class="ww-pop">
+              <input id="model-search" class="ww-search" type="text" placeholder="Search models…" autocomplete="off"
+                     autocapitalize="off" spellcheck="false" oninput="wwFilterModels()">
+              <div id="model-rows">
+                <div class="ww-note">Loading models…</div>
+              </div>
+              <div class="ww-note" id="model-empty" style="display:none;">No models match. Paste an ID below instead.</div>
+            </div>
+          </div>
+
+          <form hx-post="/api/settings/model" hx-swap="none" style="margin-top:12px;">
+            <div class="key-wrap plain">
+              <input id="model-input" type="text" name="model" value="${esc(currentModel)}"
+                     placeholder="vendor/model — e.g. anthropic/claude-3.5-sonnet" autocomplete="off"
+                     autocapitalize="off" spellcheck="false" oninput="wwSetModelField(this.value)">
+            </div>
+            <a class="key-link" href="https://openrouter.ai/models" target="_blank">Browse all models at OpenRouter</a>
+            <button id="model-save" type="submit" class="ww-save ww-save-sm">SAVE MODEL</button>
+          </form>
+        </div>"""
+    }
+
+    /** Dropdown label for a model ID, with the free router spelled out. */
+    private fun labelFor(modelId: String): String =
+        if (modelId == ModelId.DEFAULT) "$modelId — Free Models Router" else modelId
+
     // ---------------- about ----------------
 
     fun aboutScreen(): String {
@@ -95,11 +139,15 @@ object Views {
               <li><code>?ask</code> - Ask AI anything about your text and get a response.</li>
             </ul>
 
+            <h2>Choosing a Model</h2>
+            <p>WordWise runs on <strong>OpenRouter</strong>. By default it uses the free models router, so it costs nothing. To pick a different model, open <strong>Settings</strong> and either choose one from the searchable list or paste a model path such as <code>anthropic/claude-3.5-sonnet</code> into the <strong>AI MODEL</strong> field.</p>
+            <p>Paid models use your OpenRouter account's own billing. If a model needs a subscription or is otherwise unavailable to your account, OpenRouter returns an error and WordWise leaves your text untouched.</p>
+
             <h2>How it works</h2>
             <p>WordWise runs as an Android <strong>Accessibility Service</strong>. When you type a command after your text, it:</p>
             <ol>
               <li>Reads the surrounding text from the input field.</li>
-              <li>Sends it to <strong>OpenRouter</strong>'s free models with the appropriate prompt.</li>
+              <li>Sends it to your chosen <strong>OpenRouter</strong> model with the appropriate prompt.</li>
               <li>Replaces the text in place, instantly, in any app.</li>
             </ol>
             <p>Password fields are always skipped.</p>
@@ -109,7 +157,7 @@ object Views {
               <li><strong>Frontend</strong> - <code>htmx</code> with server-rendered HTML, running in a native Android WebView.</li>
               <li><strong>Backend</strong> - embedded <strong>Ktor</strong> (CIO) server on-device, bound to localhost.</li>
               <li><strong>Language</strong> - <strong>Kotlin</strong>, front to back: the UI screens are rendered by the same Kotlin process that runs the accessibility service.</li>
-              <li><strong>AI</strong> - <strong>OpenRouter</strong> API with your own free key.</li>
+              <li><strong>AI</strong> - <strong>OpenRouter</strong> API with your own key.</li>
             </ul>
 
             <h2>Security &amp; Privacy</h2>

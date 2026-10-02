@@ -11,6 +11,7 @@ package com.musa.wordwise.network
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -35,7 +36,13 @@ import java.util.concurrent.TimeUnit
 object AiClient {
 
     private const val TAG = "AiClient"
-    const val MODEL = "openrouter/free"
+
+    /**
+     * Free models router, used when the user has not chosen a model in settings.
+     * See [Prefs.getModel] for how the real value is resolved.
+     */
+    const val DEFAULT_MODEL = ModelId.DEFAULT
+
     private const val ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
     private const val HTTP_REFERER = "https://github.com/musa-dabwe/WordWise"
     private const val APP_TITLE = "WordWise"
@@ -67,6 +74,9 @@ object AiClient {
         "Follow the user's instructions precisely. " +
         "Return only the result with no commentary, explanations, or quotation marks. " +
         "Do not use Markdown or any other formatting — output must be plain text suitable for direct insertion into a text field. " +
+        "Never use em-dashes (—); use a comma, colon, semicolon, or restructure the sentence instead. " +
+        "Avoid starting a sentence or clause with a conjunction such as 'But', 'And', or 'So'. " +
+        "Keep sentences concise and split overly long ones. " +
         "If the request is ambiguous, give your best interpretation."
 
     sealed class Result {
@@ -79,64 +89,76 @@ object AiClient {
      * Sends [text] to OpenRouter for grammar and style correction.
      * Returns a [Result] — callers must handle all three cases.
      *
+     * [model] is an OpenRouter model ID; blank resolves to [DEFAULT_MODEL] so a
+     * missing setting degrades to the free router instead of failing the request.
+     *
      * This function owns its own [withContext] switch. The call site in
      * GrammarFixService must NOT wrap this call in another withContext.
      */
-    suspend fun fixGrammar(text: String, apiKey: String): Result =
+    suspend fun fixGrammar(text: String, apiKey: String, model: String = DEFAULT_MODEL): Result =
         withContext(Dispatchers.IO) {
-            val payload = buildJsonObject {
-                put("model", MODEL)
-                put("messages", buildJsonArray {
-                    add(buildJsonObject {
-                        put("role", "system")
-                        put("content", GRAMMAR_SYSTEM_PROMPT)
-                    })
-                    add(buildJsonObject {
-                        put("role", "user")
-                        put("content", text)
-                    })
-                })
-            }.toString()
-
             val request = Request.Builder()
                 .url(ENDPOINT)
                 .header("Authorization", "Bearer $apiKey")
                 .header("Content-Type", "application/json")
                 .header("HTTP-Referer", HTTP_REFERER)
                 .header("X-Title", APP_TITLE)
-                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .post(fixPayload(text, model).toString().toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
             executeRequest(request)
         }
 
-    suspend fun ask(prompt: String, apiKey: String): Result =
+    suspend fun ask(prompt: String, apiKey: String, model: String = DEFAULT_MODEL): Result =
         withContext(Dispatchers.IO) {
-            val payload = buildJsonObject {
-                put("model", MODEL)
-                put("messages", buildJsonArray {
-                    add(buildJsonObject {
-                        put("role", "system")
-                        put("content", ASK_SYSTEM_PROMPT)
-                    })
-                    add(buildJsonObject {
-                        put("role", "user")
-                        put("content", prompt)
-                    })
-                })
-            }.toString()
-
             val request = Request.Builder()
                 .url(ENDPOINT)
                 .header("Authorization", "Bearer $apiKey")
                 .header("Content-Type", "application/json")
                 .header("HTTP-Referer", HTTP_REFERER)
                 .header("X-Title", APP_TITLE)
-                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .post(askPayload(prompt, model).toString().toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
             executeRequest(request)
         }
+
+    /**
+     * Builds the `?fix` request body.
+     *
+     * Extracted so tests can assert the chosen model actually reaches the
+     * payload. Previously this was inline in a `withContext` wrapped around a
+     * live network call, which meant reverting it to a hardcoded constant would
+     * have left every test green while silently ignoring the user's choice.
+     */
+    internal fun fixPayload(text: String, model: String): JsonObject = buildJsonObject {
+        put("model", ModelId.resolve(model))
+        put("messages", buildJsonArray {
+            add(buildJsonObject {
+                put("role", "system")
+                put("content", GRAMMAR_SYSTEM_PROMPT)
+            })
+            add(buildJsonObject {
+                put("role", "user")
+                put("content", text)
+            })
+        })
+    }
+
+    /** Builds the `?ask` request body. See [fixPayload] for why this is split out. */
+    internal fun askPayload(prompt: String, model: String): JsonObject = buildJsonObject {
+        put("model", ModelId.resolve(model))
+        put("messages", buildJsonArray {
+            add(buildJsonObject {
+                put("role", "system")
+                put("content", ASK_SYSTEM_PROMPT)
+            })
+            add(buildJsonObject {
+                put("role", "user")
+                put("content", prompt)
+            })
+        })
+    }
 
     private fun executeRequest(request: Request): Result {
         return try {

@@ -8,6 +8,8 @@
 
 package com.musa.wordwise.server
 
+import com.musa.wordwise.network.ModelId
+
 /**
  * The single-page shell: pastel design-system CSS, the htmx runtime, the
  * persistent header + Settings/About tabs, and the client-side glue JS
@@ -104,6 +106,17 @@ a { color:var(--accsolid); text-decoration:none; }
 .ww-save:active { transform:scale(.97); }
 .ww-save.saved { animation:wwSaved .4s; }
 
+/* model picker (search box + note rows inside the dropdown popup) */
+/* .key-wrap reserves 74px on the right for the show/hide eye button; the model
+   field has no such button, so .plain restores even padding. */
+.key-wrap.plain input { padding-right:16px; }
+.ww-search { width:100%; border:none; outline:none; background:var(--soft); color:var(--ink);
+  font-family:inherit; font-size:15px; padding:12px 14px; border-radius:14px; margin:2px 2px 8px; }
+.ww-note { padding:13px 14px; font-size:13.5px; font-weight:500; color:var(--sub); }
+.ww-row .tag { flex:none; font-family:monospace; font-size:10px; font-weight:800; letter-spacing:.04em;
+  padding:3px 7px; border-radius:7px; background:var(--soft); color:var(--accsolid); }
+.ww-save-sm { padding:15px; font-size:16px; margin-top:16px; }
+
 /* dropdown selector */
 .ww-drop { position:relative; }
 .ww-sel { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;
@@ -119,6 +132,11 @@ a { color:var(--accsolid); text-decoration:none; }
   background:var(--popbg); border:1px solid var(--popbd); border-radius:20px;
   box-shadow:0 20px 42px -12px var(--popsh); padding:8px; animation:wwDrop .28s both; }
 .ww-drop.open .ww-pop { display:block; }
+/* The model list can be 60+ rows tall. Without a height cap the popup overflows
+   the viewport and #ww-backdrop (position:fixed, z-index 40) swallows every tap
+   below the fold, so rows would be visible but untappable. */
+#model-rows { max-height:min(52vh,420px); overflow-y:auto; -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain; }
 .ww-row { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; border:none;
   cursor:pointer; text-align:left; padding:15px 14px; border-radius:14px; background:transparent;
   transition:filter .2s; animation:wwSlide .34s both; }
@@ -189,6 +207,7 @@ a { color:var(--accsolid); text-decoration:none; }
 
 <script>
 var WW_THEMES = ${Themes.toJs()};
+var WW_DEFAULT_MODEL = ${jsonStr(ModelId.DEFAULT)};
 window.WW = { theme: ${jsonStr(themeKey)} };
 
 var wwScreenUrl = '/screens/home';
@@ -207,8 +226,6 @@ document.body.addEventListener('ww-toast', function (e) { wwToast(e.detail.value
 
 document.body.addEventListener('htmx:afterSwap', function (e) {
   if (!e.detail.target) return;
-  /* a swap replaces any open dropdown with closed markup, so the backdrop must go too */
-  if (e.detail.target.id === 'model-card') wwCloseDrops();
   if (e.detail.target.id === 'main-container') {
     var path = e.detail.pathInfo && (e.detail.pathInfo.finalRequestPath || e.detail.pathInfo.requestPath);
     if (path && path.indexOf('/screens/') === 0) wwScreenUrl = path;
@@ -252,6 +269,164 @@ document.body.addEventListener('ww-saved', function () {
   b._h = setTimeout(function () { b.textContent = 'SAVE API KEY'; b.classList.remove('saved'); }, 1700);
 });
 
+/* ---- model picker ---- */
+/* Free models first, then alphabetical — most users want the free router. */
+var WW_MODELS = [];
+var WW_MODELS_LOADING = false;
+
+/* Must be a consistent comparator: never returning 0 on a tie makes
+   cmp(a,b) != -cmp(b,a), which can throw "comparison function violates general
+   sorting algorithm" on the ~150-row catalog. Ties are common because
+   ModelCatalog falls back to the id when a model has no name. */
+function wwSortModels(a, b) {
+  if (a.free !== b.free) return a.free ? -1 : 1;
+  var na = a.name.toLowerCase(), nb = b.name.toLowerCase();
+  if (na !== nb) return na < nb ? -1 : 1;
+  return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+}
+
+/* WW_DEFAULT_MODEL is emitted by the server from ModelId.DEFAULT. */
+function wwModelLabel(id) {
+  return id === WW_DEFAULT_MODEL ? id + ' — Free Models Router' : id;
+}
+
+/* Keeps the dropdown label and checkmarks in step with the paste field. */
+function wwSetModelField(id) {
+  var i = document.getElementById('model-input');
+  if (i) i.value = id;
+  var l = document.getElementById('model-label');
+  if (l) l.textContent = wwModelLabel(id);
+  document.querySelectorAll('#model-rows .ww-row').forEach(function (row) {
+    var c = row.querySelector('.check');
+    if (c) c.style.visibility = row.getAttribute('data-id') === id ? 'visible' : 'hidden';
+  });
+}
+
+function wwNote(text) {
+  var d = document.createElement('div');
+  d.className = 'ww-note';
+  d.textContent = text;
+  return d;
+}
+
+function wwLoadModels() {
+  var rows = document.getElementById('model-rows');
+  if (!rows) return;
+  /* An htmx re-swap of #main-container replaces #model-rows with fresh
+     "Loading…" markup, so a warm cache still has to re-render. Only skip the
+     network call, never the render. */
+  if (WW_MODELS.length) { wwFilterModels(); return; }
+  if (WW_MODELS_LOADING) return;
+  WW_MODELS_LOADING = true;
+
+  rows.textContent = '';
+  rows.appendChild(wwNote('Loading models…'));
+
+  fetch('/api/models').then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function (data) {
+    WW_MODELS_LOADING = false;
+    if (!Array.isArray(data)) throw new Error('unexpected payload');
+    WW_MODELS = data.filter(function (m) {
+      return m && typeof m.id === 'string' && typeof m.name === 'string';
+    }).sort(wwSortModels);
+    wwFilterModels();
+  }).catch(function () {
+    WW_MODELS_LOADING = false;
+    /* Re-query: the user may have navigated to About while this was in
+       flight, which detaches the node we captured. */
+    var live = document.getElementById('model-rows');
+    if (!live) return;
+    live.textContent = '';
+    live.appendChild(wwNote('Could not load models — paste an ID below'));
+  });
+}
+
+/*
+ * Rows are built with createElement/textContent, never innerHTML. Model names
+ * come from a third-party catalog and are untrusted; textContent makes that
+ * data structurally incapable of becoming markup.
+ */
+function wwFilterModels() {
+  var rows = document.getElementById('model-rows');
+  if (!rows || !WW_MODELS.length) return;
+  var search = document.getElementById('model-search');
+  var input = document.getElementById('model-input');
+  var q = ((search && search.value) || '').trim().toLowerCase();
+  var current = (input && input.value) || '';
+
+  var frag = document.createDocumentFragment();
+  var shown = 0;
+
+  for (var i = 0; i < WW_MODELS.length && shown < 60; i++) {
+    var m = WW_MODELS[i];
+    if (q && m.name.toLowerCase().indexOf(q) === -1 && m.id.toLowerCase().indexOf(q) === -1) continue;
+
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ww-row';
+    b.setAttribute('data-id', m.id);
+    b.addEventListener('click', wwChooseModel);
+
+    var name = document.createElement('span');
+    name.className = 'name';
+    var val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = m.name;
+    name.appendChild(val);
+    b.appendChild(name);
+
+    /* The id disambiguates models that share a display name, and the context
+       length is the main practical difference between candidates. */
+    var sub = document.createElement('span');
+    sub.className = 'sub';
+    sub.textContent = (m.ctx ? Math.round(m.ctx / 1024) + 'k ctx · ' : '') + m.id;
+    name.appendChild(sub);
+
+    if (m.free === true) {
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = 'FREE';
+      b.appendChild(tag);
+    }
+
+    var c = document.createElement('span');
+    c.className = 'check';
+    c.textContent = '✓';
+    c.style.visibility = m.id === current ? 'visible' : 'hidden';
+    b.appendChild(c);
+
+    frag.appendChild(b);
+    shown++;
+  }
+
+  rows.textContent = '';
+  if (shown === 0) {
+    rows.appendChild(wwNote(q ? 'No models match' : 'Could not load models — paste an ID below'));
+  } else {
+    rows.appendChild(frag);
+  }
+  var empty = document.getElementById('model-empty');
+  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+}
+
+function wwChooseModel(ev) {
+  wwSetModelField(ev.currentTarget.getAttribute('data-id'));
+  wwCloseDrops();
+  wwToast('Model selected — tap SAVE MODEL to apply');
+}
+
+document.body.addEventListener('ww-model-saved', function (e) {
+  var b = document.getElementById('model-save');
+  if (!b) return;
+  wwSetModelField(e.detail.value || e.detail);
+  b.textContent = 'Saved ✓';
+  b.classList.add('saved');
+  clearTimeout(b._h);
+  b._h = setTimeout(function () { b.textContent = 'SAVE MODEL'; b.classList.remove('saved'); }, 1700);
+});
+
 /* ---- dropdowns ---- */
 function wwToggleDrop(id) {
   var d = document.getElementById(id);
@@ -260,6 +435,13 @@ function wwToggleDrop(id) {
   if (!open) {
     d.classList.add('open');
     document.getElementById('ww-backdrop').classList.add('show');
+    /* Lazy-load the catalog on first open so leaving the picker untouched
+       never spends an OpenRouter request. */
+    if (id === 'model-drop') {
+      var s = document.getElementById('model-search');
+      if (s) s.value = '';
+      wwLoadModels();
+    }
   }
 }
 function wwCloseDrops() {
