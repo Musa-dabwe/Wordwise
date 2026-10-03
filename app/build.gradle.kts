@@ -22,7 +22,10 @@ android {
         // Ktor's server engines need API 26+; matches PoetMusic.
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // versionCode 2 keeps versionName at 1.0.0 so the re-published v1.0.0
+        // release can reuse its download URL, while still installing cleanly
+        // over the original v1.0.0 APK.
+        versionCode = 2
         versionName = "1.0.0"
 
         vectorDrawables {

@@ -21,6 +21,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.data.Prefs
 import com.musa.wordwise.network.AiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -150,9 +151,14 @@ class GrammarFixService : AccessibilityService() {
                     return@launch
                 }
 
+                // Resolved per request, not cached: the user can change the model
+                // in settings while the service is running.
+                val model = Prefs.getModel(this@GrammarFixService)
+                Log.d(TAG, "Using model $model")
+
                 val result = when (command) {
-                    is Command.Fix -> AiClient.fixGrammar(textForAi, apiKey)
-                    is Command.Ask -> AiClient.ask(textForAi, apiKey)
+                    is Command.Fix -> AiClient.fixGrammar(textForAi, apiKey, model)
+                    is Command.Ask -> AiClient.ask(textForAi, apiKey, model)
                 }
 
                 stopSpinner(token)
