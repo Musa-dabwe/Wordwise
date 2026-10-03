@@ -7,6 +7,10 @@
 
 ## Development Timeline
 
+### 2026-10-03 - Security hardening before re-release
+Session: [session-2026-10-03-security-hardening.md](sessions/session-2026-10-03-security-hardening.md)
+Closed the three vulnerabilities found while reviewing the model picker, then re-cut the release. The API key used to be rendered into the settings HTML and all settings were written by POSTing to the on-device Ktor server — and because Android's loopback is a shared namespace, any installed app could read the key or force a settings change, including moving the user onto a paid model. The server is now display-only: the key is write-only behind the app's WebView bridge, there are no mutating routes, foreign `Origin` requests are refused, and the responses carry no-store, CSP and `X-Frame-Options`. Also hardened ProGuard against a release-only `@Serializable` failure. Reviewed by two independent `fledge-alpha-free` passes.
+
 ### 2026-10-02 - OpenRouter model picker
 Session: [session-2026-10-02-openrouter-model-picker.md](sessions/session-2026-10-02-openrouter-model-picker.md)
 Replaced the hardcoded `openrouter/free` router with a user-chosen model. Settings
