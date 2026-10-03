@@ -21,6 +21,16 @@ fun esc(s: String): String = buildString(s.length) {
     }
 }
 
+/**
+ * Encodes [s] as a JSON string literal, safe to embed inside an inline
+ * `<script>` block.
+ *
+ * `<` and `>` are escaped as well as the mandatory JSON characters: a value
+ * containing `</script>` would otherwise terminate the script element and turn
+ * whatever follows into markup. That value has to come from preferences, which
+ * a backup restore or an `adb` edit can change without passing through the
+ * validator that normally rejects it.
+ */
 fun jsonStr(s: String): String = buildString(s.length + 2) {
     append('"')
     for (ch in s) when (ch) {
@@ -29,6 +39,9 @@ fun jsonStr(s: String): String = buildString(s.length + 2) {
         '\n' -> append("\\n")
         '\r' -> append("\\r")
         '\t' -> append("\\t")
+        '<' -> append("\\u003c")
+        '>' -> append("\\u003e")
+        '&' -> append("\\u0026")
         else -> if (ch < ' ') append("\\u%04x".format(ch.code)) else append(ch)
     }
     append('"')

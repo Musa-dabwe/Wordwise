@@ -16,13 +16,16 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsControllerCompat
+import com.musa.wordwise.data.ApiKeyRepository
 import com.musa.wordwise.data.Prefs
+import com.musa.wordwise.network.ModelId
 import com.musa.wordwise.server.Themes
 import com.musa.wordwise.server.WwServer
 import java.net.InetSocketAddress
@@ -31,25 +34,34 @@ import kotlin.concurrent.thread
 
 /**
  * Native WebView container hosting the htmx frontend served by the embedded
- * Ktor server. External links (Google AI Studio) open in the browser; the
- * frontend drives the system Accessibility settings through [WwServer].
+ * Ktor server. External links (OpenRouter) open in the system browser; the
+ * frontend drives native settings through [WwNativeBridge].
+ *
+ * ## Trust boundary
+ *
+ * The embedded server on 127.0.0.1:8977 is **display-only**. Every secret read
+ * and every settings write goes through [WwNativeBridge], which is only reachable
+ * from the WebView this activity creates.
+ *
+ * This matters because Android's loopback is a single shared namespace: any
+ * installed app holding INTERNET can request that port directly. When the API key
+ * was rendered into the settings HTML and settings were saved by POSTing to the
+ * local server, any co-resident app could read the key and silently rewrite the
+ * user's settings, including switching to a paid model. Keeping the socket
+ * free of secrets and free of mutating routes removes that class of attack
+ * rather than trying to authenticate it.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
+
+    private val apiKeyRepository by lazy { ApiKeyRepository(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Status bar follows the selected pastel theme's canvas color.
         applyStatusBarColor(Themes.byKey(Prefs.getTheme(this)).statusBar)
-
-        WwServer.accessibilitySettingsRequester = {
-            runOnUiThread {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                Toast.makeText(this, R.string.toast_accessibility_hint, Toast.LENGTH_LONG).show()
-            }
-        }
 
         web = WebView(this)
         with(web.settings) {
@@ -60,24 +72,39 @@ class MainActivity : AppCompatActivity() {
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
+            // Belt and braces with the server's no-store headers: never let the
+            // settings document reach Chromium's on-disk cache.
+            cacheMode = WebSettings.LOAD_NO_CACHE
         }
         web.addJavascriptInterface(WwNativeBridge(), "WwNative")
         web.webChromeClient = WebChromeClient()
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 // Keep navigation inside the embedded server; anything else
-                // (the AI Studio link) opens in the user's browser.
+                // (the OpenRouter links) opens in the user's browser.
                 if (request.url.host == "127.0.0.1") return false
                 runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
                 return true
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val url = request.url
+
+                // addJavascriptInterface injects the bridge into EVERY frame in
+                // this WebView, and shouldOverrideUrlLoading is not guaranteed
+                // to fire for subframes. So block any non-loopback subresource
+                // outright rather than relying on the top-level navigation check:
+                // that keeps a cross-origin iframe, image or font from ever
+                // executing with WwNative in scope.
+                if (url.host != "127.0.0.1") {
+                    return WebResourceResponse("text/plain", "utf-8", 403, "Forbidden",
+                        emptyMap(), ByteArray(0).inputStream())
+                }
+
                 // Serve static assets straight from the APK: no Ktor round trip
                 // and, because intercepted responses bypass Chromium's network
                 // stack, nothing lands in the WebView HTTP disk cache.
-                val url = request.url
-                if (url.host != "127.0.0.1" || url.path?.startsWith("/assets/") != true) return null
+                if (url.path?.startsWith("/assets/") != true) return null
                 val name = url.lastPathSegment ?: return null
                 if (!name.matches(Regex("[A-Za-z0-9._-]+"))) return null
                 val mime = when {
@@ -114,11 +141,83 @@ class MainActivity : AppCompatActivity() {
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = luminance > 0.5
     }
 
-    /** Exposed to the WebView so the frontend can drive native chrome. */
+    /**
+     * The one JS-to-native trust boundary.
+     *
+     * Mutating methods return `""` on success and a user-facing message on
+     * failure, so the frontend can surface the reason without a second channel.
+     * They never return secret material: [hasApiKey] reports a boolean, and the
+     * key itself can only ever be written, never read back out.
+     *
+     * Called on a WebView background thread, so anything touching the UI hops
+     * to the main thread explicitly. Preference and keystore access is
+     * thread-safe.
+     */
     inner class WwNativeBridge {
+
+        // ---------- API key ----------
+
+        /**
+         * Whether a key is stored. Deliberately a boolean: the key is never
+         * readable from JS, so it cannot leak back out through the bridge,
+         * through the local server, or into a screenshot of the DOM.
+         */
+        @JavascriptInterface
+        fun hasApiKey(): Boolean = apiKeyRepository.hasApiKey()
+
+        /** Saves [key], replacing any existing one. `""` on success. */
+        @JavascriptInterface
+        fun saveApiKey(key: String): String {
+            val trimmed = key.trim()
+            if (trimmed.isEmpty()) return "API key cannot be empty"
+            if (trimmed.length > 200) return "That does not look like an OpenRouter key"
+            apiKeyRepository.saveApiKey(trimmed)
+            return ""
+        }
+
+        // ---------- model ----------
+
+        @JavascriptInterface
+        fun getModel(): String = Prefs.getModel(this@MainActivity)
+
+        /** Validates and stores the model. Returns [ModelId]'s reason on reject. */
+        @JavascriptInterface
+        fun setModel(raw: String): String =
+            when (val result = ModelId.validate(raw)) {
+                is ModelId.Result.Valid -> {
+                    Prefs.setModel(this@MainActivity, result)
+                    ""
+                }
+                is ModelId.Result.Invalid -> result.reason
+            }
+
+        // ---------- theme ----------
+
+        @JavascriptInterface
+        fun getTheme(): String = Prefs.getTheme(this@MainActivity)
+
+        @JavascriptInterface
+        fun setTheme(key: String): String {
+            if (key !in Themes.KEYS) return "Unknown theme"
+            Prefs.setTheme(this@MainActivity, key)
+            runOnUiThread { applyStatusBarColor(Themes.byKey(key).statusBar) }
+            return ""
+        }
+
+        // ---------- native chrome ----------
+
         @JavascriptInterface
         fun setStatusBarColor(hex: String) {
             runOnUiThread { if (!isDestroyed) applyStatusBarColor(hex) }
+        }
+
+        @JavascriptInterface
+        fun openAccessibilitySettings() {
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                Toast.makeText(this@MainActivity, R.string.toast_accessibility_hint, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -139,8 +238,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        WwServer.accessibilitySettingsRequester = null
-        if (::web.isInitialized) web.clearCache(false)
+        if (::web.isInitialized) {
+            // Drop the injected bridge before the WebView goes away.
+            web.removeJavascriptInterface("WwNative")
+            web.clearCache(false)
+        }
         super.onDestroy()
     }
 }

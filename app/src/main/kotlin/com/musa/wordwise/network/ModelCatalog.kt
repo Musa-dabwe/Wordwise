@@ -40,9 +40,11 @@ data class ModelInfo(
  * Reads the OpenRouter model catalog so the settings screen can offer a
  * browsable picker.
  *
- * The catalog is public, but the request still carries the user's key so
- * OpenRouter can apply their plan's entitlements (which models are actually
- * available to this account).
+ * Deliberately unauthenticated. `GET /api/v1/models` is public, and sending the
+ * user's key would mean every catalog refresh spends their credential on a
+ * request whose response is not account-specific anyway. A model the account
+ * cannot actually use is reported by OpenRouter at completion time, which is the
+ * same authority that validates the ID in the first place.
  */
 object ModelCatalog {
 
@@ -72,11 +74,10 @@ object ModelCatalog {
      * is the primary interaction. A null here just means the dropdown stays
      * unavailable.
      */
-    suspend fun fetch(apiKey: String): List<ModelInfo>? = withContext(Dispatchers.IO) {
+    suspend fun fetch(): List<ModelInfo>? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(ENDPOINT)
-                .header("Authorization", "Bearer $apiKey")
                 .header("HTTP-Referer", HTTP_REFERER)
                 .header("X-Title", APP_TITLE)
                 .build()
