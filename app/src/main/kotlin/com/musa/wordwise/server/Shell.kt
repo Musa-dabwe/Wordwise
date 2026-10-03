@@ -98,6 +98,9 @@ a { color:var(--accsolid); text-decoration:none; }
   font-size:11px; font-weight:800; color:var(--sub); background:var(--soft); padding:6px 9px; border-radius:9px; }
 .key-eye:active { transform:translateY(-50%) scale(.9); }
 .key-link { display:inline-block; margin-top:11px; font-weight:700; font-size:14.5px; }
+/* The stored key is never rendered, so this line is what tells the user a key
+   already exists and that typing a new one replaces it. */
+.key-state { margin-top:10px; font-size:13.5px; font-weight:600; color:var(--accsolid); min-height:18px; }
 
 /* save button */
 .ww-save { border:none; cursor:pointer; width:100%; background:linear-gradient(135deg,var(--accent),var(--accent2));
@@ -222,7 +225,17 @@ function wwToast(msg) {
   t._h = setTimeout(function () { t.classList.remove('show'); }, 2200);
 }
 
-document.body.addEventListener('ww-toast', function (e) { wwToast(e.detail.value || e.detail); });
+/* ---- native bridge ----
+ * Every secret read and every settings write goes through WwNative, which only
+ * the app's own WebView can reach. The local server has no mutating routes, so
+ * a hostile page or a co-resident app cannot read the key or change settings.
+ * Mutating bridge methods return "" on success or a reason to show the user. */
+function wwBridge() { return window.WwNative; }
+
+function wwOpenAccessibility() {
+  var b = wwBridge();
+  if (b && b.openAccessibilitySettings) b.openAccessibilitySettings();
+}
 
 document.body.addEventListener('htmx:afterSwap', function (e) {
   if (!e.detail.target) return;
@@ -235,7 +248,69 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     wwCloseDrops();
     window.scrollTo(0, 0);
     wwPoll();
+    wwRefreshKeyState();
   }
+});
+
+/* ---- API key ----
+ * The stored key is write-only: the server never renders it, so the field
+ * always starts empty and shows whether one exists instead. */
+
+function wwRefreshKeyState() {
+  var note = document.getElementById('key-state');
+  var btn = document.getElementById('save-btn');
+  if (!note || !btn) return;
+  var b = wwBridge();
+  var has = !!(b && b.hasApiKey && b.hasApiKey());
+  note.textContent = has ? 'A key is saved on this device. Paste a new one to replace it.' : '';
+  btn.textContent = has ? 'REPLACE API KEY' : 'SAVE API KEY';
+}
+
+function wwSaveKey() {
+  var input = document.getElementById('key-input');
+  var b = wwBridge();
+  if (!input || !b || !b.saveApiKey) { wwToast('Unavailable'); return; }
+  var err = b.saveApiKey(input.value);
+  if (err) { wwToast(err); return; }
+  input.value = '';
+  input.type = 'password';
+  var eye = document.querySelector('.key-eye');
+  if (eye) eye.textContent = 'SHOW';
+  wwRefreshKeyState();
+  wwSavedFeedback('save-btn', 'API key saved securely', wwKeyButtonLabel());
+}
+
+/* Shared "Saved ✓" button animation for the bridge-driven forms. */
+function wwSavedFeedback(btnId, toastMsg, resetLabel) {
+  var b = document.getElementById(btnId);
+  wwToast(toastMsg);
+  if (!b) return;
+  b.textContent = 'Saved ✓';
+  b.classList.add('saved');
+  clearTimeout(b._h);
+  b._h = setTimeout(function () { b.textContent = resetLabel; b.classList.remove('saved'); }, 1700);
+}
+
+/* Derived from live state rather than a fixed string: the key button reads
+   REPLACE once a key exists, so hardcoding the reset label would put it out of
+   sync with the note 1.7s after a successful save. */
+function wwKeyButtonLabel() {
+  var b = wwBridge();
+  return (b && b.hasApiKey && b.hasApiKey()) ? 'REPLACE API KEY' : 'SAVE API KEY';
+}
+
+function wwSaveModel() {
+  var input = document.getElementById('model-input');
+  var b = wwBridge();
+  if (!input || !b || !b.setModel) { wwToast('Unavailable'); return; }
+  var err = b.setModel(input.value);
+  if (err) { wwToast(err); return; }
+  wwSetModelField(b.getModel ? b.getModel() : input.value);
+  wwSavedFeedback('model-save', 'Model saved', 'SAVE MODEL');
+}
+
+document.body.addEventListener('htmx:load', function () {
+  wwSetModelField(wwBridge() && wwBridge().getModel ? wwBridge().getModel() : WW_DEFAULT_MODEL);
 });
 
 /* ---- live accessibility-service status poller ---- */
@@ -258,16 +333,6 @@ function wwToggleKey(btn) {
   i.type = show ? 'text' : 'password';
   btn.textContent = show ? 'HIDE' : 'SHOW';
 }
-
-/* ---- save-button feedback ---- */
-document.body.addEventListener('ww-saved', function () {
-  var b = document.getElementById('save-btn');
-  if (!b) return;
-  b.textContent = 'Saved ✓';
-  b.classList.add('saved');
-  clearTimeout(b._h);
-  b._h = setTimeout(function () { b.textContent = 'SAVE API KEY'; b.classList.remove('saved'); }, 1700);
-});
 
 /* ---- model picker ---- */
 /* Free models first, then alphabetical — most users want the free router. */
@@ -417,15 +482,25 @@ function wwChooseModel(ev) {
   wwToast('Model selected — tap SAVE MODEL to apply');
 }
 
-document.body.addEventListener('ww-model-saved', function (e) {
-  var b = document.getElementById('model-save');
-  if (!b) return;
-  wwSetModelField(e.detail.value || e.detail);
-  b.textContent = 'Saved ✓';
-  b.classList.add('saved');
-  clearTimeout(b._h);
-  b._h = setTimeout(function () { b.textContent = 'SAVE MODEL'; b.classList.remove('saved'); }, 1700);
-});
+/* ---- themes ---- */
+function wwSetTheme(key) {
+  var b = wwBridge();
+  if (!b || !b.setTheme) return;
+  var err = b.setTheme(key);
+  if (err) { wwToast(err); return; }
+  wwApplyTheme(key);
+  wwCloseDrops();
+  var t = WW_THEMES[key];
+  var name = document.getElementById('theme-name');
+  if (name) name.textContent = t.name;
+  var sw = document.getElementById('theme-swatch');
+  if (sw) sw.style.background = t.swatch;
+  document.querySelectorAll('#theme-drop .ww-row').forEach(function (row) {
+    var on = row.getAttribute('data-k') === key;
+    var c = row.querySelector('.check');
+    if (c) c.style.visibility = on ? 'visible' : 'hidden';
+  });
+}
 
 /* ---- dropdowns ---- */
 function wwToggleDrop(id) {
@@ -458,22 +533,6 @@ function wwApplyTheme(key) {
   window.WW.theme = key;
   if (window.WwNative && WwNative.setStatusBarColor) WwNative.setStatusBarColor(t.statusBar);
 }
-function wwSetTheme(key) {
-  wwApplyTheme(key);
-  wwCloseDrops();
-  var t = WW_THEMES[key];
-  var name = document.getElementById('theme-name');
-  if (name) name.textContent = t.name;
-  var sw = document.getElementById('theme-swatch');
-  if (sw) sw.style.background = t.swatch;
-  document.querySelectorAll('#theme-drop .ww-row').forEach(function (row) {
-    var on = row.getAttribute('data-k') === key;
-    var c = row.querySelector('.check');
-    if (c) c.style.visibility = on ? 'visible' : 'hidden';
-  });
-  fetch('/api/settings/theme', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'name=' + encodeURIComponent(key) });
-}
-
 document.addEventListener('DOMContentLoaded', function () {
   wwApplyTheme(window.WW.theme);
   wwGo('/screens/home');

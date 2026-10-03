@@ -8,8 +8,6 @@
 
 package com.musa.wordwise.server
 
-import android.content.Context
-import com.musa.wordwise.data.Prefs
 import com.musa.wordwise.network.ModelId
 
 /** Server-rendered htmx screens in the WordWise pastel design system. */
@@ -17,8 +15,15 @@ object Views {
 
     // ---------------- settings (home) ----------------
 
-    fun homeScreen(context: Context, serviceEnabled: Boolean, key: String): String {
-        val currentModel = Prefs.getModel(context)
+    /**
+     * Settings screen.
+     *
+     * Takes no secret as a parameter, on purpose: whatever this returns is
+     * readable by any app on the device, because the Ktor port is a shared
+     * loopback socket. Account state reaches the page as booleans and non-secret
+     * values only; the API key is write-only and lives behind the WebView bridge.
+     */
+    fun homeScreen(serviceEnabled: Boolean, currentModel: String, currentTheme: String): String {
         return """
         <div class="screen" data-screen="home" style="display:flex; flex-direction:column; gap:24px;">
 
@@ -27,18 +32,19 @@ object Views {
               <div id="status-dot" class="status-dot${if (serviceEnabled) " on" else ""}"></div>
               <div id="status-label" class="status-label">${if (serviceEnabled) "SERVICE ACTIVE" else "SERVICE PAUSED"}</div>
             </div>
-            <button id="status-btn" class="status-btn" hx-post="/api/accessibility/open" hx-swap="none">${if (serviceEnabled) "Enabled ✓" else "Enable"}</button>
+            <button id="status-btn" class="status-btn" onclick="wwOpenAccessibility()">${if (serviceEnabled) "Enabled ✓" else "Enable"}</button>
           </div>
 
-          <form hx-post="/api/key" hx-swap="none">
+          <div>
             <div class="ww-lab" style="margin-bottom:10px;">API KEY</div>
             <div class="key-wrap">
-              <input id="key-input" type="password" name="key" value="${esc(key)}" placeholder="Paste your OpenRouter API key here" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <input id="key-input" type="password" placeholder="Paste your OpenRouter API key here" autocomplete="off" autocapitalize="off" spellcheck="false">
               <button type="button" class="key-eye" onclick="wwToggleKey(this)">SHOW</button>
             </div>
+            <div id="key-state" class="key-state"></div>
             <a class="key-link" href="https://openrouter.ai/keys" target="_blank">Get a free key at OpenRouter</a>
-            <button id="save-btn" type="submit" class="ww-save" style="margin-top:18px;">SAVE API KEY</button>
-          </form>
+            <button id="save-btn" type="button" class="ww-save" style="margin-top:18px;" onclick="wwSaveKey()">SAVE API KEY</button>
+          </div>
 
           <div>
             <div class="ww-lab" style="margin-bottom:10px;">AI MODEL</div>
@@ -47,7 +53,7 @@ object Views {
 
           <div>
             <div class="ww-lab" style="margin-bottom:10px;">THEME</div>
-            ${themePicker(context)}
+            ${themePicker(currentTheme)}
           </div>
 
           <div>
@@ -61,9 +67,12 @@ object Views {
         </div>"""
     }
 
-    /** Theme dropdown — selection is applied client-side by wwSetTheme(). */
-    private fun themePicker(context: Context): String {
-        val current = Themes.byKey(Prefs.getTheme(context))
+    /**
+     * Theme dropdown. Selection is persisted through the WebView bridge by
+     * `wwSetTheme()`, never by POSTing to the local server.
+ */
+    private fun themePicker(currentTheme: String): String {
+        val current = Themes.byKey(currentTheme)
         val rows = Themes.ALL.mapIndexed { i, t ->
             val on = t.key == current.key
             """
@@ -108,15 +117,14 @@ object Views {
             </div>
           </div>
 
-          <form hx-post="/api/settings/model" hx-swap="none" style="margin-top:12px;">
+          <div style="margin-top:12px;">
             <div class="key-wrap plain">
-              <input id="model-input" type="text" name="model" value="${esc(currentModel)}"
-                     placeholder="vendor/model — e.g. anthropic/claude-3.5-sonnet" autocomplete="off"
-                     autocapitalize="off" spellcheck="false" oninput="wwSetModelField(this.value)">
+              <input id="model-input" type="text" placeholder="vendor/model — e.g. anthropic/claude-3.5-sonnet"
+                     autocomplete="off" autocapitalize="off" spellcheck="false" oninput="wwSetModelField(this.value)">
             </div>
             <a class="key-link" href="https://openrouter.ai/models" target="_blank">Browse all models at OpenRouter</a>
-            <button id="model-save" type="submit" class="ww-save ww-save-sm">SAVE MODEL</button>
-          </form>
+            <button id="model-save" type="button" class="ww-save ww-save-sm" onclick="wwSaveModel()">SAVE MODEL</button>
+          </div>
         </div>"""
     }
 
@@ -162,8 +170,10 @@ object Views {
 
             <h2>Security &amp; Privacy</h2>
             <ul>
-              <li><strong>Key at rest</strong> - your OpenRouter key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV).</li>
-              <li><strong>In transit</strong> - sent only to <code>openrouter.ai</code> over TLS; cleartext traffic is blocked.</li>
+              <li><strong>Key at rest</strong> - your OpenRouter key is stored with <code>EncryptedSharedPreferences</code> (AES-256-GCM / AES-256-SIV), using a key that never leaves the device keystore.</li>
+              <li><strong>Key is write-only</strong> - the key is never rendered back into this page, and there is no way to read it out of the app. Once saved, the settings screen only tells you that a key exists.</li>
+              <li><strong>No local write surface</strong> - the on-device server only serves display pages. Reading your key and saving the key, model or theme all happen inside the app, not over the local network socket.</li>
+              <li><strong>In transit</strong> - text and key are sent only to <code>openrouter.ai</code> over TLS; cleartext traffic is blocked everywhere else.</li>
               <li><strong>No retention</strong> - text lives in memory only for the request. Never logged, cached, or stored.</li>
               <li><strong>Sensitive fields</strong> - password and web-password inputs are never read.</li>
               <li><strong>Backups excluded</strong> - the encrypted key store never leaves the device.</li>

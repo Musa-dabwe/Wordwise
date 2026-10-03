@@ -53,8 +53,8 @@ object Prefs {
      * Takes [ModelId.Result.Valid] rather than a [String] so an invalid value
      * cannot be passed at all: a silent downgrade to [ModelId.DEFAULT] would
      * make a typo look like a successful save while the user's real choice was
-     * discarded. Rejecting belongs to the caller (see `POST /api/settings/model`),
-     * which can then tell the user why.
+     * discarded. Rejecting belongs to the caller, which can then tell the user
+     * why — `MainActivity.WwNativeBridge.setModel`.
      */
     fun setModel(context: Context, validated: ModelId.Result.Valid) {
         val modelId = validated.modelId
