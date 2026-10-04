@@ -61,6 +61,25 @@ class MainActivity : AppCompatActivity() {
     // effect immediately instead of on next service start.
     private val apiKeyRepository by lazy { ApiKeyRepository.get(this) }
 
+    /**
+     * The in-flight `confirm()` awaiting an answer.
+     *
+     * A `JsResult` must be resolved exactly once. If the activity is destroyed
+     * while the dialog is up — rotation, or a low-memory kill — nothing would
+     * resolve it, leaving the JavaScript promise hung forever and leaking the
+     * dialog window. Cleared here so [resolveJsConfirm] becomes a no-op
+     * afterwards and a later dismissal cannot resolve it twice.
+     */
+    private var pendingJsResult: JsResult? = null
+    private var pendingJsDialog: AlertDialog? = null
+
+    private fun resolveJsConfirm(confirmed: Boolean) {
+        val result = pendingJsResult ?: return
+        pendingJsResult = null
+        pendingJsDialog = null
+        if (confirmed) result.confirm() else result.cancel()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -99,13 +118,19 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 runOnUiThread {
                     if (isDestroyed) { result?.cancel(); return@runOnUiThread }
-                    AlertDialog.Builder(this@MainActivity)
+                    val dialog = AlertDialog.Builder(this@MainActivity)
                         .setTitle("Remove API key")
                         .setMessage(message)
                         .setCancelable(false)
-                        .setPositiveButton("Remove") { _, _ -> result?.confirm() }
-                        .setNegativeButton("Cancel") { _, _ -> result?.cancel() }
-                        .show()
+                        .setPositiveButton("Remove") { _, _ -> resolveJsConfirm(true) }
+                        .setNegativeButton("Cancel") { _, _ -> resolveJsConfirm(false) }
+                        .create()
+                    pendingJsResult = result
+                    pendingJsDialog = dialog
+                    // Safety net for any dismissal route not covered by the two
+                    // buttons: the WebView must never be left waiting forever.
+                    dialog.setOnDismissListener { resolveJsConfirm(false) }
+                    dialog.show()
                 }
                 // true = the app handled it, so suppress the WebView's default.
                 return true
@@ -284,6 +309,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // Dismissing fires the dismiss listener, which resolves the pending
+        // confirm() as cancelled; the extra call covers a dialog that never got
+        // shown. resolveJsConfirm is idempotent.
+        pendingJsDialog?.dismiss()
+        resolveJsConfirm(false)
         if (::web.isInitialized) {
             // Drop the injected bridge before the WebView goes away.
             web.removeJavascriptInterface("WwNative")
