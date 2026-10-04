@@ -35,7 +35,7 @@ class GrammarFixService : AccessibilityService() {
     @Suppress("DEPRECATION")
     private fun AccessibilityNodeInfo.safeRecycle() = recycle()
 
-    private val apiKeyRepository by lazy { ApiKeyRepository(this) }
+    private val apiKeyRepository by lazy { ApiKeyRepository.get(this) }
 
     private val shortcut = "?fix"
     private val shortcutRegex = Regex("""\?fix\s*$""")

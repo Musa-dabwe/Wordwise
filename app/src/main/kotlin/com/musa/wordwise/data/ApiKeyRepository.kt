@@ -6,7 +6,20 @@ import android.os.Build
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-class ApiKeyRepository(private val context: Context) {
+/**
+ * Encrypted access to the OpenRouter API key.
+ *
+ * **Must be obtained through [get].** `EncryptedSharedPreferences` keeps an
+ * in-memory map built when the instance is created and does not observe writes
+ * from another instance, so two `ApiKeyRepository` objects in the same process
+ * would not see each other's saves or deletions. That mattered once the settings
+ * UI started writing the key: the accessibility service would keep sending
+ * requests with the key it had read at startup, long after the user replaced or
+ * removed it.
+ */
+class ApiKeyRepository private constructor(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val prefs: SharedPreferences by lazy {
         try {
@@ -17,9 +30,9 @@ class ApiKeyRepository(private val context: Context) {
             // cannot be decrypted. Wipe and start fresh — the user re-enters
             // the key once instead of the app crashing on every launch.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                context.deleteSharedPreferences(PREFS_NAME)
+                appContext.deleteSharedPreferences(PREFS_NAME)
             } else {
-                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .edit().clear().commit()
             }
             createEncryptedPrefs()
@@ -28,11 +41,11 @@ class ApiKeyRepository(private val context: Context) {
 
     @Suppress("DEPRECATION")
     private fun createEncryptedPrefs(): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
+        val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
         return EncryptedSharedPreferences.create(
-            context,
+            appContext,
             PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
@@ -70,5 +83,17 @@ class ApiKeyRepository(private val context: Context) {
         private const val PREFS_NAME = "secret_keys"
         private const val KEY_API_KEY = "api_key_openrouter"
         private const val KEY_LEGACY_ZEN = "api_key_opencode_zen"
+
+        @Volatile private var instance: ApiKeyRepository? = null
+
+        /**
+         * The process-wide repository. Double-checked so the accessibility
+         * service and the settings UI share one `EncryptedSharedPreferences`
+         * cache and therefore see each other's writes immediately.
+         */
+        fun get(context: Context): ApiKeyRepository =
+            instance ?: synchronized(this) {
+                instance ?: ApiKeyRepository(context).also { instance = it }
+            }
     }
 }

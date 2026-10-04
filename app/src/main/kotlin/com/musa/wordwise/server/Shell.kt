@@ -279,12 +279,21 @@ function wwKeyButtonLabel() {
   return (b && b.hasApiKey && b.hasApiKey()) ? 'REPLACE API KEY' : 'SAVE API KEY';
 }
 
-function wwRefreshKeyState() {
+/*
+ * `note` overrides the default hint. Callers that just wrote the key pass
+ * KEY_SAVED_NOTE, because the default hint would immediately contradict them.
+ */
+function wwRefreshKeyState(note) {
   var btn = document.getElementById('save-btn');
   var b = wwBridge();
   var has = !!(b && b.hasApiKey && b.hasApiKey());
-  wwSetKeyNote(has ? KEY_REPLACE_HINT : '');
-  if (btn) btn.textContent = wwKeyButtonLabel();
+  wwSetKeyNote(note !== undefined ? note : (has ? KEY_REPLACE_HINT : ''));
+  if (btn) {
+    /* Cancel a pending "Saved ✓" reset first: its timeout would otherwise
+       write a stale label over the correct one (see wwSavedFeedback). */
+    clearTimeout(btn._h);
+    btn.textContent = wwKeyButtonLabel();
+  }
   var rm = document.getElementById('key-remove');
   if (rm) rm.style.display = has ? 'inline-block' : 'none';
 }
@@ -315,12 +324,19 @@ function wwSaveKey() {
   input.type = 'password';
   var eye = document.querySelector('.key-eye');
   if (eye) eye.textContent = 'SHOW';
-  wwSetKeyNote(KEY_SAVED_NOTE);
-  wwRefreshKeyState();
-  wwSavedFeedback('save-btn', 'API key saved securely', wwKeyButtonLabel());
+  /* The note must be passed in, not set first: wwRefreshKeyState writes the
+     note itself and would overwrite it with the "already saved, replace it"
+     hint — the exact message that prompted this change. */
+  wwRefreshKeyState(KEY_SAVED_NOTE);
+  wwSavedFeedback('save-btn', 'API key saved securely', wwKeyButtonLabel);
 }
 
-/* Shared "Saved ✓" button animation for the bridge-driven forms. */
+/*
+ * Shared "Saved ✓" button animation for the bridge-driven forms.
+ * `resetLabel` may be a function, which is then evaluated when the timer
+ * fires rather than now: the key button's label depends on whether a key
+ * exists, and that can change inside the 1700ms window (save, then remove).
+ */
 function wwSavedFeedback(btnId, toastMsg, resetLabel) {
   var b = document.getElementById(btnId);
   wwToast(toastMsg);
@@ -328,7 +344,10 @@ function wwSavedFeedback(btnId, toastMsg, resetLabel) {
   b.textContent = 'Saved ✓';
   b.classList.add('saved');
   clearTimeout(b._h);
-  b._h = setTimeout(function () { b.textContent = resetLabel; b.classList.remove('saved'); }, 1700);
+  b._h = setTimeout(function () {
+    b.textContent = typeof resetLabel === 'function' ? resetLabel() : resetLabel;
+    b.classList.remove('saved');
+  }, 1700);
 }
 
 /* Derived from live state rather than a fixed string: the key button reads

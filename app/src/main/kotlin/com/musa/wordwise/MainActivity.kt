@@ -8,11 +8,13 @@
 
 package com.musa.wordwise
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
 import android.webkit.JavascriptInterface
+import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -55,7 +57,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
 
-    private val apiKeyRepository by lazy { ApiKeyRepository(this) }
+    // Shared with GrammarFixService so a key saved or removed in settings takes
+    // effect immediately instead of on next service start.
+    private val apiKeyRepository by lazy { ApiKeyRepository.get(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +81,36 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_NO_CACHE
         }
         web.addJavascriptInterface(WwNativeBridge(), "WwNative")
-        web.webChromeClient = WebChromeClient()
+        web.webChromeClient = object : WebChromeClient() {
+            /**
+             * Without this override the WebView suppresses JS dialogs and
+             * `confirm()` returns false, so the Remove saved key button would
+             * silently do nothing.
+             *
+             * Non-cancelable because the callback must be invoked exactly once;
+             * letting the dialog be dismissed any other way would leave the
+             * WebView waiting on a result that never arrives.
+             */
+            override fun onJsConfirm(
+                view: WebView?,
+                url: String?,
+                message: String?,
+                result: JsResult?
+            ): Boolean {
+                runOnUiThread {
+                    if (isDestroyed) { result?.cancel(); return@runOnUiThread }
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Remove API key")
+                        .setMessage(message)
+                        .setCancelable(false)
+                        .setPositiveButton("Remove") { _, _ -> result?.confirm() }
+                        .setNegativeButton("Cancel") { _, _ -> result?.cancel() }
+                        .show()
+                }
+                // true = the app handled it, so suppress the WebView's default.
+                return true
+            }
+        }
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 // Keep navigation inside the embedded server; anything else
