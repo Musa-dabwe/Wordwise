@@ -50,6 +50,16 @@ class ApiKeyRepository(private val context: Context) {
 
     fun hasApiKey(): Boolean = getApiKey().isNotBlank()
 
+    /**
+     * Deletes the stored key.
+     *
+     * Required because the key is write-only from the UI's point of view: making
+     * it unreadable also removed the user's only in-app way to remove it.
+     */
+    fun clearApiKey() {
+        prefs.edit().remove(KEY_API_KEY).apply()
+    }
+
     fun hasLegacyZenKey(): Boolean = prefs.contains(KEY_LEGACY_ZEN)
 
     fun removeLegacyZenKey() {
