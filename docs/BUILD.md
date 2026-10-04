@@ -7,6 +7,10 @@
 
 ## Development Timeline
 
+### 2026-10-04 - Real-device testing and coverage for the untested layers
+Session: [session-2026-10-04-device-tests-and-coverage.md](sessions/session-2026-10-04-device-tests-and-coverage.md)
+Finally ran the app on a real device: all 15 instrumented tests pass on an Android 12 phone over wireless ADB. Added 52 tests for the layers that had none — the 607 lines of frontend JavaScript in `Shell.kt`, the server's security guard, the settings renderer, the data layer, and the catalog fetch — because the coverage gaps lined up exactly with the three UI bugs that had shipped. Also added `scripts/run-device-tests.sh`, since Gradle's Unified Test Platform fails over WiFi and reports the run as failing tests when zero tests actually ran. New tests were mutation-checked to confirm they can fail. 87 -> 139 JVM tests.
+
 ### 2026-10-03 - Security hardening before re-release
 Session: [session-2026-10-03-security-hardening.md](sessions/session-2026-10-03-security-hardening.md)
 Closed the three vulnerabilities found while reviewing the model picker, then re-cut the release. The API key used to be rendered into the settings HTML and all settings were written by POSTing to the on-device Ktor server — and because Android's loopback is a shared namespace, any installed app could read the key or force a settings change, including moving the user onto a paid model. The server is now display-only: the key is write-only behind the app's WebView bridge, there are no mutating routes, foreign `Origin` requests are refused, and the responses carry no-store, CSP and `X-Frame-Options`. Also hardened ProGuard against a release-only `@Serializable` failure. Reviewed by two independent `fledge-alpha-free` passes.

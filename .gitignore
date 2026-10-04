@@ -12,3 +12,5 @@
 # Local tooling / generated media (not source)
 /.opencode/node_modules
 /brag-output
+# Robolectric offline dependency cache (symlinks to ~/.m2, not committed)
+/.robolectric-deps

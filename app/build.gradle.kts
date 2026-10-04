@@ -57,6 +57,21 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.all {
+            // Robolectric fetches its android-all jar from Maven Central on first
+            // use. That fetch hangs or fails with UnknownHostException on this
+            // network, so run offline against the jar already cached in ~/.m2
+            // (symlinked into .robolectric-deps/, gitignored).
+            // To refresh: mkdir -p .robolectric-deps && ln -sf ~/.m2/repository/org/robolectric/android-all-instrumented/*/android-all-instrumented-*.jar .robolectric-deps/
+            it.systemProperty("robolectric.offline", "true")
+            it.systemProperty(
+                "robolectric.dependency.dir",
+                rootProject.file(".robolectric-deps").absolutePath
+            )
+        }
+    }
+
     packaging {
         resources {
             excludes += setOf(
@@ -91,6 +106,17 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // Runs the embedded Ktor server's routing and guard plugin in-process, so
+    // the security headers and Origin rejection are asserted rather than assumed.
+    testImplementation("io.ktor:ktor-server-test-host-jvm:2.3.13")
+    // Serves canned HTTP to exercise ModelCatalog.fetch without hitting
+    // OpenRouter.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // Gives SharedPreferences, the Keystore and EncryptedSharedPreferences a
+    // JVM implementation so the data layer is testable off-device.
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
