@@ -44,6 +44,7 @@ object Views {
             <div id="key-state" class="key-state"></div>
             <a class="key-link" href="https://openrouter.ai/keys" target="_blank">Get a free key at OpenRouter</a>
             <button id="save-btn" type="button" class="ww-save" style="margin-top:18px;" onclick="wwSaveKey()">SAVE API KEY</button>
+            <button id="key-remove" type="button" class="key-remove" style="display:none;" onclick="wwRemoveKey()">Remove saved key</button>
           </div>
 
           <div>

@@ -175,6 +175,19 @@ class MainActivity : AppCompatActivity() {
             return ""
         }
 
+        /**
+         * Deletes the stored key.
+         *
+         * Needed because the key is write-only: making it unreadable also removed
+         * the user's only in-app way to get rid of it, which would otherwise be
+         * clearing app data.
+         */
+        @JavascriptInterface
+        fun clearApiKey(): String {
+            apiKeyRepository.clearApiKey()
+            return ""
+        }
+
         // ---------- model ----------
 
         @JavascriptInterface

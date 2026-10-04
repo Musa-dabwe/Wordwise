@@ -101,6 +101,9 @@ a { color:var(--accsolid); text-decoration:none; }
 /* The stored key is never rendered, so this line is what tells the user a key
    already exists and that typing a new one replaces it. */
 .key-state { margin-top:10px; font-size:13.5px; font-weight:600; color:var(--accsolid); min-height:18px; }
+.key-remove { display:none; margin-top:12px; border:none; cursor:pointer; background:transparent;
+  color:var(--sub); font-family:inherit; font-size:13.5px; font-weight:700; padding:6px 0;
+  text-decoration:underline; }
 
 /* save button */
 .ww-save { border:none; cursor:pointer; width:100%; background:linear-gradient(135deg,var(--accent),var(--accent2));
@@ -256,14 +259,50 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
  * The stored key is write-only: the server never renders it, so the field
  * always starts empty and shows whether one exists instead. */
 
-function wwRefreshKeyState() {
+/*
+ * Two distinct states, because they mean opposite things to the user:
+ *   - the screen loads with a key already present -> how to replace it
+ *   - the user just saved one -> confirmation, not a prompt to do it again
+ * Showing the replace hint immediately after a save reads as "your old key is
+ * still here", which is exactly the wrong thing to say at that moment.
+ */
+var KEY_REPLACE_HINT = 'A key is saved on this device. Paste a new one to replace it.';
+var KEY_SAVED_NOTE = '✓ Key saved securely.';
+
+function wwSetKeyNote(text) {
   var note = document.getElementById('key-state');
+  if (note) note.textContent = text;
+}
+
+function wwKeyButtonLabel() {
+  var b = wwBridge();
+  return (b && b.hasApiKey && b.hasApiKey()) ? 'REPLACE API KEY' : 'SAVE API KEY';
+}
+
+function wwRefreshKeyState() {
   var btn = document.getElementById('save-btn');
-  if (!note || !btn) return;
   var b = wwBridge();
   var has = !!(b && b.hasApiKey && b.hasApiKey());
-  note.textContent = has ? 'A key is saved on this device. Paste a new one to replace it.' : '';
-  btn.textContent = has ? 'REPLACE API KEY' : 'SAVE API KEY';
+  wwSetKeyNote(has ? KEY_REPLACE_HINT : '');
+  if (btn) btn.textContent = wwKeyButtonLabel();
+  var rm = document.getElementById('key-remove');
+  if (rm) rm.style.display = has ? 'inline-block' : 'none';
+}
+
+/*
+ * The key is write-only, so there is no way to read it back — which also means
+ * the user needs an explicit way to delete it. Previously clearing app data was
+ * the only option.
+ */
+function wwRemoveKey() {
+  var b = wwBridge();
+  if (!b || !b.clearApiKey) return;
+  if (!window.confirm('Remove the stored OpenRouter API key?\n\nWordWise will stop working until you add one again.')) return;
+  var err = b.clearApiKey();
+  if (err) { wwToast(err); return; }
+  wwSetKeyNote('');
+  wwToast('API key removed');
+  wwRefreshKeyState();
 }
 
 function wwSaveKey() {
@@ -276,6 +315,7 @@ function wwSaveKey() {
   input.type = 'password';
   var eye = document.querySelector('.key-eye');
   if (eye) eye.textContent = 'SHOW';
+  wwSetKeyNote(KEY_SAVED_NOTE);
   wwRefreshKeyState();
   wwSavedFeedback('save-btn', 'API key saved securely', wwKeyButtonLabel());
 }
@@ -293,11 +333,7 @@ function wwSavedFeedback(btnId, toastMsg, resetLabel) {
 
 /* Derived from live state rather than a fixed string: the key button reads
    REPLACE once a key exists, so hardcoding the reset label would put it out of
-   sync with the note 1.7s after a successful save. */
-function wwKeyButtonLabel() {
-  var b = wwBridge();
-  return (b && b.hasApiKey && b.hasApiKey()) ? 'REPLACE API KEY' : 'SAVE API KEY';
-}
+   sync with the note 1.7s after a successful save. See wwKeyButtonLabel above. */
 
 function wwSaveModel() {
   var input = document.getElementById('model-input');
