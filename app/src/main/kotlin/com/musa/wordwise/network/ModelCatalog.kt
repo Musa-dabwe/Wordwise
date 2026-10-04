@@ -49,9 +49,20 @@ data class ModelInfo(
 object ModelCatalog {
 
     private const val TAG = "ModelCatalog"
-    private const val ENDPOINT = "https://openrouter.ai/api/v1/models"
     private const val HTTP_REFERER = "https://github.com/musa-dabwe/WordWise"
     private const val APP_TITLE = "WordWise"
+
+    /**
+     * Overridable so tests can point [fetch] at a local server.
+     *
+     * Kept `internal` and `var` rather than a constructor parameter because this
+     * is a singleton; tests set it in `@Before` and restore it in `@After`. It is
+     * the only seam, which is what lets the "no Authorization header is sent"
+     * invariant be asserted against a real recorded request instead of by
+     * reading the source.
+     */
+    @Volatile
+    internal var endpoint: String = "https://openrouter.ai/api/v1/models"
 
     /** Display names are untrusted; cap what one row can carry. */
     private const val MAX_NAME_LENGTH = 160
@@ -77,7 +88,7 @@ object ModelCatalog {
     suspend fun fetch(): List<ModelInfo>? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url(ENDPOINT)
+                .url(endpoint)
                 .header("HTTP-Referer", HTTP_REFERER)
                 .header("X-Title", APP_TITLE)
                 .build()
