@@ -1,445 +1,320 @@
-// Copyright 2026 Fackson Mutetesha (Musa-dabwe)
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-
 package com.musa.wordwise.server
 
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.testing.ApplicationTestBuilder
+import io.ktor.server.testing.testApplication
+import com.musa.wordwise.network.ModelInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.io.File
 
 /**
- * Tests for the security guard of the embedded server in [WwServer].
+ * Security invariants of the on-device server, asserted against **real HTTP
+ * responses**.
  *
- * ## Why most of these tests read the source instead of driving the socket
+ * Every test here previously parsed the source text of `WwServer.kt` and
+ * asserted that a string was present. That proved nothing about what a request
+ * actually receives: it broke on cosmetic edits and passed on behaviourally
+ * broken code. The routing block and guard are now reachable via
+ * [wordWiseModule] + [ServerEnvironment], so `testApplication` drives the real
+ * code with fakes for the outside world.
  *
- * [WwServer.start] binds a real port (127.0.0.1:8977) and its `started` flag is
- * one-shot, so it cannot be started per-test; and the routing block and the
- * `WwLocalGuard` plugin are inline lambdas inside it with no seam that
- * `testApplication` could drive. The invariants that matter here are therefore
- * asserted at the source level: the guard's predicates, the route table, the
- * header values and the cache constants are parsed out of `WwServer.kt` and
- * checked exactly. Every assertion is written to fail if the corresponding
- * line is removed, weakened or re-ordered.
- *
- * The two pure render functions the routes call — [Views.homeScreen] and
- * [Shell.page] — have no Android dependencies, so the "no secret in any
- * response" invariant is additionally tested behaviourally by calling them
- * directly. They run under the Robolectric runner per project convention.
+ * The properties under test are the fix for a shipped vulnerability: the API key
+ * was rendered into this server's HTML and all settings were written by POSTing
+ * to it, and because Android's loopback is a single shared namespace, any
+ * installed app could read the key or force a settings change.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class WwServerTest {
 
-    private val source: String = readServerSource()
+    private val origin = "http://127.0.0.1:${WwServer.PORT}"
 
-    /** Whitespace-collapsed view of the source, for multi-line expressions. */
-    private val normalized: String = source.replace(Regex("\\s+"), " ")
+    private fun env(
+        models: suspend () -> List<ModelInfo> = { emptyList() },
+        assets: Map<String, ByteArray> = mapOf("htmx.min.js" to "// htmx".toByteArray())
+    ) = ServerEnvironment(
+        loadAsset = { name -> assets[name] },
+        theme = { "peach" },
+        model = { "openrouter/free" },
+        isServiceEnabled = { false },
+        models = models
+    )
 
-    companion object {
-        private const val SERVER_KOTLIN = "src/main/kotlin/com/musa/wordwise/server/WwServer.kt"
-        private const val WEB_ASSETS_DIR = "src/main/assets/web"
-
-        private fun readServerSource(): String = locate(SERVER_KOTLIN).readText()
-
-        /**
-         * Locates a project file whether the test JVM's working directory is the
-         * module dir (Gradle default), the repo root, or a subdirectory.
-         */
-        private fun locate(relative: String): File {
-            val candidates = mutableListOf(File(relative), File("app/$relative"))
-            var dir = File(".").absoluteFile
-            while (true) {
-                candidates += File(dir, relative)
-                candidates += File(dir, "app/$relative")
-                dir = dir.parentFile ?: break
-            }
-            return candidates.firstOrNull { it.exists() }
-                ?: error("Cannot locate $relative from working directory ${File(".").absolutePath}")
-        }
-    }
-
-    /** The `routing { ... }` block: the last block in the file. */
-    private fun routingBlock(): String = source.substringAfter("routing {")
-
-    /** The `WwLocalGuard` plugin's `onCall` block, which ends where routing begins. */
-    private fun onCallBlock(): String =
-        source.substringAfter("onCall { call ->").substringBefore("routing {")
-
-    private fun assetsRouteBlock(): String =
-        routingBlock().substringAfter("get(\"/assets/{name}\")").substringBefore("get(\"/screens/home\")")
-
-    /** Drops `//` line comments so prose about a header cannot satisfy a search for it. */
-    private fun stripComments(src: String): String =
-        src.lines().joinToString("\n") { it.substringBefore("//") }
-
-    private fun statusRouteBlock(): String =
-        routingBlock().substringAfter("get(\"/api/status\")").substringBefore("get(\"/api/models\")")
-
-    /** The `/api/models` route is the last one in the file. */
-    private fun modelsRouteBlock(): String = routingBlock().substringAfter("get(\"/api/models\")")
-
-    // ------------------------------------------------------------------
-    // Invariant 1: no mutating routes exist.
-    // ------------------------------------------------------------------
-
-    /**
-     * Invariant 1 — the removed write routes must stay removed.
-     *
-     * Android's loopback is a shared namespace: any installed app, or any web
-     * page via a no-preflight form POST, could rewrite settings while these
-     * routes existed — including silently switching the user to a paid model.
-     * Ktor answers 404 for a path with no registered route, so the absence of
-     * a `post(...)` registration IS the "POST returns 404" guarantee.
-     */
-    @Test
-    fun `no mutating routes are registered`() {
-        assertFalse("a POST route was re-added", source.contains("post("))
-        assertFalse("a PUT route was re-added", source.contains("put("))
-        assertFalse("a DELETE route was re-added", source.contains("delete("))
-        assertFalse("a PATCH route was re-added", source.contains("patch("))
-
-        // The four routes removed for the loopback-write vulnerability.
-        assertFalse(source.contains("post(\"/api/key\")"))
-        assertFalse(source.contains("post(\"/api/settings/model\")"))
-        assertFalse(source.contains("post(\"/api/settings/theme\")"))
-        assertFalse(source.contains("post(\"/api/accessibility/open\")"))
+    private fun ApplicationTestBuilder.serve(env: ServerEnvironment = env()) {
+        application { wordWiseModule(env, origin) }
     }
 
     // ------------------------------------------------------------------
-    // Invariant 2: only the six public GET routes exist.
+    // 1. No mutating routes.
     // ------------------------------------------------------------------
 
-    /**
-     * Invariant 2 — the route table is exactly the six public, read-only
-     * routes. An extra `get(` (or any `route(`/`resource(`) fails the count.
-     */
     @Test
-    fun `only the six public GET routes exist`() {
-        val routing = routingBlock()
-        listOf(
-            "get(\"/\")",
-            "get(\"/assets/{name}\")",
-            "get(\"/screens/home\")",
-            "get(\"/screens/about\")",
-            "get(\"/api/status\")",
-            "get(\"/api/models\")"
-        ).forEach { route ->
-            assertTrue("missing route $route", routing.contains(route))
-        }
-        assertEquals("unexpected extra routes", 6, Regex("get\\(").findAll(routing).count())
-        assertFalse(routing.contains("post("))
-        assertFalse(routing.contains("put("))
-        assertFalse(routing.contains("delete("))
-        assertFalse(routing.contains("patch("))
-        assertFalse(routing.contains("route("))
-        assertFalse(routing.contains("resource("))
-    }
-
-    // ------------------------------------------------------------------
-    // Invariant 3: no secret in any response.
-    // ------------------------------------------------------------------
-
-    /**
-     * Invariant 3 (behavioural half) — the settings screen must never render
-     * the OpenRouter key. The key is write-only and lives behind the WebView
-     * bridge; the local port is readable by any app on the device.
-     *
-     * The positive controls ("SERVICE PAUSED", the model id, the API KEY
-     * label) fail if the renderer breaks, so the absence checks cannot pass
-     * vacuously.
-     */
-    @Test
-    fun `home screen renders no api key`() {
-        val html = Views.homeScreen(
-            serviceEnabled = false,
-            currentModel = "vendor/model",
-            currentTheme = "peach"
+    fun `no mutating route is registered`() = testApplication {
+        serve()
+        val removed = listOf(
+            "/api/key",
+            "/api/settings/model",
+            "/api/settings/theme",
+            "/api/accessibility/open"
         )
-
-        // Positive controls: the screen really rendered.
-        assertTrue(html.contains("SERVICE PAUSED"))
-        assertTrue(html.contains("vendor/model"))
-        assertTrue(html.contains("API KEY"))
-
-        // OpenRouter keys all start with sk-or-; the old status payload's
-        // hasKey flag must not come back either.
-        assertFalse("API key rendered into the settings screen", html.contains("sk-or-"))
-        assertFalse(html.contains("hasKey"))
-
-        // The key field must be an empty password input — no value attribute.
-        val keyInput = Regex("<input id=\"key-input\"[^>]*>").find(html)
-        assertTrue("key input missing", keyInput != null)
-        assertFalse("key input carries a value", keyInput!!.value.contains("value="))
-    }
-
-    /**
-     * Invariant 3 (behavioural half) — the app shell must not render a key.
-     */
-    @Test
-    fun `shell page renders no api key`() {
-        val html = Shell.page("peach")
-
-        // Positive controls.
-        assertTrue(html.contains("WordWise"))
-        assertTrue(html.contains("/assets/htmx.min.js"))
-
-        assertFalse("API key rendered into the shell page", html.contains("sk-or-"))
-        assertFalse(html.contains("hasKey"))
-    }
-
-    /**
-     * Invariant 3 (source half) — /api/status returns only {"enabled":bool}.
-     * The old payload also carried hasKey, which told any co-resident app
-     * whether the user had a key stored.
-     */
-    @Test
-    fun `status route returns only the enabled flag`() {
-        val status = statusRouteBlock()
-        assertTrue(status.contains("\"\"\"{\"enabled\":\$enabled}\"\"\""))
-        assertFalse("hasKey leaked into a response", source.contains("hasKey"))
-    }
-
-    // ------------------------------------------------------------------
-    // Invariant 4: foreign Origin is refused with 403.
-    // ------------------------------------------------------------------
-
-    /**
-     * Invariant 4 — the Origin guard's truth table, asserted on the exact
-     * predicate: no Origin header -> allowed; Origin exactly
-     * http://127.0.0.1:8977 -> allowed; anything else -> 403.
-     *
-     * This is what stops a web page the user is browsing from driving the
-     * server: a form POST needs no preflight, so without this check the
-     * loopback surface would be reachable from any tab.
-     */
-    @Test
-    fun `guard allows same-origin and refuses foreign origins`() {
-        val guard = onCallBlock()
-
-        assertTrue(guard.contains("val origin = call.request.headers[\"Origin\"]"))
-        assertTrue(guard.contains("if (origin != null && origin != ORIGIN) {"))
-        assertTrue(guard.contains("call.respond(HttpStatusCode.Forbidden)"))
-        assertTrue(guard.contains("return@onCall"))
-
-        // The refusal must come after the check, not before it.
-        assertTrue(
-            "Forbidden respond must follow the origin check",
-            guard.indexOf("origin != null && origin != ORIGIN") <
-                guard.indexOf("call.respond(HttpStatusCode.Forbidden)")
-        )
-
-        // The allowed origin is exactly the server's own origin.
-        assertTrue(source.contains("private val ORIGIN = \"http://127.0.0.1:\$PORT\""))
-        assertTrue(source.contains("const val PORT = 8977"))
-    }
-
-    /**
-     * Invariant 4 (ordering) — the guard is installed before routing, so it
-     * stays defence in depth even if a route is added carelessly later.
-     */
-    @Test
-    fun `guard is installed ahead of routing`() {
-        assertTrue(
-            source.indexOf("createApplicationPlugin(\"WwLocalGuard\")") <
-                source.indexOf("routing {")
-        )
-    }
-
-    // ------------------------------------------------------------------
-    // Invariant 5: security headers on normal responses.
-    // ------------------------------------------------------------------
-
-    /**
-     * Invariant 5 — the security headers on normal responses.
-     *
-     * The settings document carries account state, so it must not be cached
-     * or framed; the CSP's frame-ancestors/form-action 'none' make the
-     * X-Frame-Options header redundant rather than load-bearing.
-     */
-    @Test
-    fun `security headers are emitted on normal responses`() {
-        val guard = onCallBlock()
-        assertTrue(
-            guard.contains(
-                "call.response.header(\"Cache-Control\", \"no-store, no-cache, must-revalidate\")"
+        for (path in removed) {
+            val response = client.post(path)
+            assertEquals(
+                "$path must not accept writes",
+                HttpStatusCode.NotFound,
+                response.status
             )
-        )
-        assertTrue(guard.contains("call.response.header(\"Pragma\", \"no-cache\")"))
-        assertTrue(guard.contains("call.response.header(\"X-Frame-Options\", \"DENY\")"))
-        assertTrue(guard.contains("call.response.header(\"Referrer-Policy\", \"no-referrer\")"))
-        assertTrue(guard.contains("call.response.header(\"X-Content-Type-Options\", \"nosniff\")"))
+        }
+    }
 
-        // The CSP is concatenated across lines, so match it normalised.
-        assertTrue(
-            "CSP must be set via response.header",
-            normalized.contains("call.response.header( \"Content-Security-Policy\",")
+    @Test
+    fun `only the six documented GET routes exist`() = testApplication {
+        serve()
+        val expected = mapOf(
+            "/" to HttpStatusCode.OK,
+            "/screens/home" to HttpStatusCode.OK,
+            "/screens/about" to HttpStatusCode.OK,
+            "/api/status" to HttpStatusCode.OK,
+            "/api/models" to HttpStatusCode.ServiceUnavailable // empty catalog
         )
-        assertTrue(normalized.contains("default-src 'self'"))
-        assertTrue(normalized.contains("frame-ancestors 'none'"))
-        assertTrue(normalized.contains("form-action 'none'"))
-        assertTrue(normalized.contains("base-uri 'none'"))
+        for ((path, status) in expected) {
+            assertEquals("GET $path", status, client.get(path).status)
+        }
+        assertEquals(HttpStatusCode.OK, client.get("/assets/htmx.min.js").status)
     }
 
     // ------------------------------------------------------------------
-    // Invariant 6: the assets route must NOT get no-store.
+    // 2. No secret in any response.
     // ------------------------------------------------------------------
 
+    @Test
+    fun `no response leaks key material`() = testApplication {
+        serve(env(assets = mapOf("x.js" to "secret".toByteArray())))
+        // Sequentially, because bodyAsText() is suspend and cannot be called
+        // from inside a non-suspend map lambda.
+        for (path in listOf("/", "/screens/home", "/screens/about", "/api/status")) {
+            val body = client.get(path).bodyAsText()
+            assertFalse("$path contained key material", body.contains("sk-or-"))
+            // The status route dropped hasKey when the key became write-only.
+            assertFalse("$path reported hasKey", body.contains("hasKey"))
+        }
+    }
+
+    @Test
+    fun `status route reports only the enabled flag`() = testApplication {
+        serve()
+        assertEquals("""{"enabled":false}""", client.get("/api/status").bodyAsText().trim())
+    }
+
+    @Test
+    fun `status route reflects the service flag`() = testApplication {
+        val on = ServerEnvironment(
+            loadAsset = { null }, theme = { "peach" }, model = { "openrouter/free" },
+            isServiceEnabled = { true }, models = { emptyList() }
+        )
+        serve(on)
+        assertEquals("""{"enabled":true}""", client.get("/api/status").bodyAsText().trim())
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Origin guard.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a request with no Origin header is allowed`() = testApplication {
+        serve()
+        assertEquals(HttpStatusCode.OK, client.get("/api/status").status)
+    }
+
+    @Test
+    fun `a request with our own Origin is allowed`() = testApplication {
+        serve()
+        val response = client.get("/api/status") { header("Origin", origin) }
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `a foreign Origin is refused`() = testApplication {
+        serve()
+        val response = client.get("/api/status") { header("Origin", "https://evil.example") }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `a foreign Origin is refused for every route`() = testApplication {
+        serve()
+        for (path in listOf("/", "/screens/home", "/api/status", "/assets/htmx.min.js")) {
+            val response = client.get(path) { header("Origin", "https://evil.example") }
+            assertEquals("GET $path", HttpStatusCode.Forbidden, response.status)
+        }
+    }
+
+    /** The guard must not also block the browser-ish Origin on our own port. */
+    @Test
+    fun `a same-origin Origin differing only by trailing slash is refused`() = testApplication {
+        serve()
+        val response = client.get("/api/status") { header("Origin", "$origin/") }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Security headers on ordinary responses.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `ordinary responses carry the full security header set`() = testApplication {
+        serve()
+        val h = client.get("/api/status").headers
+        assertEquals("no-store, no-cache, must-revalidate", h["Cache-Control"])
+        assertEquals("no-cache", h["Pragma"])
+        assertEquals("DENY", h["X-Frame-Options"])
+        assertEquals("no-referrer", h["Referrer-Policy"])
+        assertEquals("nosniff", h["X-Content-Type-Options"])
+
+        val csp = assertNotNull(h["Content-Security-Policy"]).let { h["Content-Security-Policy"]!! }
+        for (directive in listOf(
+            "default-src 'self'",
+            "frame-ancestors 'none'",
+            "form-action 'none'",
+            "base-uri 'none'",
+            "connect-src 'self'"
+        )) {
+            assertTrue("CSP missing '$directive': $csp", csp.contains(directive))
+        }
+    }
+
+    @Test
+    fun `html responses are not cacheable`() = testApplication {
+        serve()
+        assertEquals(
+            "no-store, no-cache, must-revalidate",
+            client.get("/screens/home").headers["Cache-Control"]
+        )
+    }
+
     /**
-     * Invariant 6 - the assets route must NOT get no-store.
+     * Regression: Ktor's `header()` APPENDS. The guard used to add `no-store` to
+     * every response including assets, and the assets route then added its own
+     * `max-age=86400`. Both went on the wire, `no-store` won, and asset caching
+     * was silently dead while a comment claimed otherwise.
      *
-     * Past bug: Ktor's response.header() APPENDS rather than replaces, so the
-     * guard's no-store combined with the route's max-age=86400 produced two
-     * conflicting Cache-Control headers and no-store won, silently defeating
-     * asset caching. The guard now skips Cache-Control/Pragma for /assets/.
+     * Only a real response can prove there is exactly one Cache-Control header.
      */
     @Test
-    fun `asset responses keep max-age and never receive no-store`() {
-        val guard = onCallBlock()
-        assertTrue(
-            "Cache-Control/Pragma must be inside the /assets/ exemption",
-            guard.contains("if (!call.request.path().startsWith(\"/assets/\")) {")
-        )
-        // ...and the headers really are inside that if: the order is
-        // if(assets-exempt) -> no-store -> Pragma -> X-Frame-Options (outside).
-        assertTrue(
-            guard.indexOf("startsWith(\"/assets/\")") <
-                guard.indexOf("\"Cache-Control\", \"no-store")
-        )
-        assertTrue(
-            guard.indexOf("\"Cache-Control\", \"no-store") <
-            guard.indexOf("\"Pragma\", \"no-cache\"")
-        )
-        assertTrue(
-            guard.indexOf("\"Pragma\", \"no-cache\"") <
-            guard.indexOf("\"X-Frame-Options\"")
-        )
+    fun `asset responses carry exactly one long-lived Cache-Control`() = testApplication {
+        serve()
+        val response = client.get("/assets/htmx.min.js")
+        assertEquals(HttpStatusCode.OK, response.status)
 
-        val assets = stripComments(assetsRouteBlock())
-        assertTrue(
-            "asset route must set exactly one long-lived Cache-Control",
-            assets.contains("call.response.header(\"Cache-Control\", \"max-age=86400\")")
-        )
-        // Comment-stripped: the route's own comment explains that no-store must
-        // NOT be added here, and a bare substring match would trip over it.
-        assertFalse("asset route must not emit no-store", assets.contains("no-store"))
+        val all = response.headers.getAll("Cache-Control")
+        assertNotNull("assets should set Cache-Control", all)
+        assertEquals("assets must set exactly one Cache-Control, got $all", 1, all!!.size)
+        assertTrue("expected a long cache, got $all", all.first().contains("max-age=86400"))
+        assertFalse("assets must not be no-store, got $all", all.first().contains("no-store"))
+        assertNull("assets must not receive Pragma", response.headers["Pragma"])
     }
 
-    /**
-     * Invariants 6/8 (tie-in) — the assets the pages reference exist on disk
-     * under the web/ prefix the route opens, so the long cache and the
-     * traversal guard are protecting real files.
-     */
     @Test
-    fun `served asset names exist on disk`() {
-        val dir = locate(WEB_ASSETS_DIR)
-        assertTrue("$WEB_ASSETS_DIR missing", dir.isDirectory)
-        listOf("htmx.min.js", "outfit-latin.woff2", "outfit-latin-ext.woff2").forEach {
-            assertTrue("asset $it missing", File(dir, it).exists())
+    fun `non-asset responses carry exactly one Cache-Control`() = testApplication {
+        serve()
+        val all = client.get("/api/status").headers.getAll("Cache-Control")
+        assertEquals("exactly one Cache-Control expected, got $all", 1, all?.size)
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Asset serving and traversal.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `asset content type follows the extension`() = testApplication {
+        val assets = mapOf(
+            "a.js" to byteArrayOf(1),
+            "b.woff2" to byteArrayOf(2),
+            "c.css" to byteArrayOf(3),
+            "d.bin" to byteArrayOf(4)
+        )
+        serve(env(assets = assets))
+        assertTrue(client.get("/assets/a.js").contentType()!!.contains("javascript"))
+        assertTrue(client.get("/assets/b.woff2").contentType()!!.contains("font/woff2"))
+        assertTrue(client.get("/assets/c.css").contentType()!!.contains("text/css"))
+        assertEquals(HttpStatusCode.OK, client.get("/assets/d.bin").status)
+    }
+
+    @Test
+    fun `an unknown asset is not found`() = testApplication {
+        serve()
+        assertEquals(HttpStatusCode.NotFound, client.get("/assets/missing.js").status)
+    }
+
+    @Test
+    fun `asset path traversal is refused`() = testApplication {
+        serve()
+        // The route only accepts [A-Za-z0-9._-]+, so anything with a separator,
+        // a dot-dot segment or a slash-bearing name never reaches the filesystem.
+        for (name in listOf("../secret", "..%2Fsecret", "a/b", "web", ".")) {
+            val response = client.get("/assets/$name")
+            assertTrue(
+                "traversal attempt '$name' was served: HTTP ${response.status}",
+                response.status == HttpStatusCode.NotFound ||
+                    response.status == HttpStatusCode.BadRequest
+            )
         }
     }
 
     // ------------------------------------------------------------------
-    // Invariant 7: /api/models failure is 503 with a [] body.
+    // 6. Catalog route.
     // ------------------------------------------------------------------
 
-    /**
-     * Invariant 7 — /api/models answers 503 with a [] body on catalog
-     * failure, not 204.
-     *
-     * Past bug: this route is consumed by fetch(), not htmx, so a 204 with no
-     * body looked like success and then threw at r.json() — the picker died
-     * with a confusing network error instead of its own "could not load" note.
-     */
     @Test
-    fun `models route answers 503 with an empty json array on failure`() {
-        val models = modelsRouteBlock()
-        assertTrue(
-            models.contains("call.respond(HttpStatusCode.ServiceUnavailable, \"[]\")")
-        )
-        assertTrue(
-            "success path must return the serialised catalog",
-            models.contains("call.respondText(ModelCatalog.toJson(models), ContentType.Application.Json)")
-        )
-        assertFalse("204 must not come back", source.contains("NoContent"))
+    fun `catalog failure is 503 with an empty array body`() = testApplication {
+        serve()
+        val response = client.get("/api/models")
+        assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+        assertEquals("[]", response.bodyAsText().trim())
     }
 
-    // ------------------------------------------------------------------
-    // Invariant 8: /assets/{name} refuses path traversal.
-    // ------------------------------------------------------------------
-
-    /**
-     * Invariant 8 — /assets/{name} refuses path traversal.
-     *
-     * The name is matched against [A-Za-z0-9._-]+ before the asset is opened,
-     * so ../ and a/b cannot escape web/. The regex literal is asserted exactly
-     * so a future "relaxation" (e.g. adding /) fails here first.
-     */
     @Test
-    fun `asset names are restricted to a safe character set before the file is opened`() {
-        val assets = assetsRouteBlock()
-        assertTrue(
-            assets.contains(
-                "if (!name.matches(Regex(\"[A-Za-z0-9._-]+\"))) return@get call.respond(HttpStatusCode.NotFound)"
-            )
+    fun `catalog success is 200 with the projected models`() = testApplication {
+        val models = listOf(
+            ModelInfo("openai/gpt-4o", "GPT-4o", 128000, false),
+            ModelInfo("vendor/free:free", "Free", 8192, true)
         )
-        assertTrue(assets.contains("app.assets.open(\"web/\$name\")"))
-        // The gate must run before the open.
-        assertTrue(
-            "regex gate must precede the asset open",
-            assets.indexOf("name.matches(Regex(") < assets.indexOf("app.assets.open(")
-        )
+        serve(env(models = { models }))
+        val response = client.get("/api/models")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"id\":\"openai/gpt-4o\""))
+        assertTrue(body.contains("\"ctx\":128000"))
+        assertTrue(body.contains("\"free\":true"))
     }
 
-    // ------------------------------------------------------------------
-    // Invariant 9: the catalog cache is single-flight and bounded.
-    // ------------------------------------------------------------------
-
     /**
-     * Invariant 9 — the catalog cache is single-flight and bounded.
-     *
-     * modelsOrFetch() cannot be driven from a unit test (it is private and
-     * fetches over the network), so its structure is asserted at the source
-     * level: a Mutex makes the check-then-act single-flight, the positive
-     * TTL is 1 hour, the negative TTL is 60 seconds, and an empty result is
-     * deliberately NOT written into the positive cache — only into the short
-     * negative one — so one transient failure cannot suppress the picker for
-     * an hour.
+     * The catalog is public, so this must never carry the user's credential.
+     * `ModelCatalogFetchTest` asserts that on the recorded request; this asserts
+     * the route itself does not accept or echo one.
      */
     @Test
-    fun `catalog cache is single flight and bounded`() {
-        assertTrue(source.contains("private val catalogLock = Mutex()"))
-        assertTrue(source.contains("return catalogLock.withLock {"))
-
-        // 1-hour positive TTL, 60-second negative TTL.
-        assertTrue(source.contains("private const val CATALOG_TTL_MS = 60L * 60L * 1000L"))
-        assertTrue(source.contains("private const val CATALOG_NEGATIVE_TTL_MS = 60_000L"))
-
-        // Double-checked locking: the freshness check runs again inside the lock.
-        assertTrue(source.contains("freshCatalog()?.let { return it }"))
-        assertTrue(source.contains("freshCatalog()?.let { return@withLock it }"))
-
-        // The positive cache only accepts a non-empty result...
-        assertTrue(source.contains("if (fetched.isNotEmpty()) {"))
-        assertTrue(source.contains("cachedModels = fetched"))
-        // ...and freshness requires non-emptiness too.
-        assertTrue(
-            source.contains(
-                "it.isNotEmpty() && SystemClock.elapsedRealtime() - cachedAt < CATALOG_TTL_MS"
-            )
-        )
-
-        // A failure is remembered only for the short negative TTL.
-        assertTrue(source.contains("if (now < negativeUntil) return@withLock emptyList()"))
-        assertTrue(source.contains("negativeUntil = now + CATALOG_NEGATIVE_TTL_MS"))
+    fun `catalog route does not accept a credential`() = testApplication {
+        serve()
+        val response = client.get("/api/models") {
+            header("Authorization", "Bearer sk-or-v1-leaked")
+        }
+        // It is refused as an empty catalog rather than serving anything, and in
+        // particular the body can never echo the header back.
+        assertFalse(response.bodyAsText().contains("sk-or-v1-leaked"))
     }
+
+    private fun HttpResponse.contentType() = headers["Content-Type"]
 }
