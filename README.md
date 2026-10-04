@@ -221,6 +221,41 @@ org.slf4j:slf4j-nop:2.0.13
 
 Bundled web assets: `htmx.min.js`, `outfit-latin.woff2`, `outfit-latin-ext.woff2`.
 
+## Tests
+
+139 JVM unit tests plus 15 instrumented tests.
+
+```bash
+./gradlew testDebugUnitTest          # JVM (no device needed)
+scripts/run-device-tests.sh          # instrumented, needs a connected device
+```
+
+Robolectric runs **offline** against an `android-all` jar cached in `~/.m2`, symlinked
+into `.robolectric-deps/` (gitignored). Its normal Maven fetch is unreliable here and
+can hang. To refresh it:
+
+```bash
+mkdir -p .robolectric-deps
+ln -sf ~/.m2/repository/org/robolectric/android-all-instrumented/*/android-all-instrumented-*.jar .robolectric-deps/
+```
+
+Use `scripts/run-device-tests.sh` rather than `./gradlew connectedDebugAndroidTest`
+over wireless ADB. Gradle's Unified Test Platform fails with
+`ShellCommandUnresponsiveException` while installing over WiFi, and reports the run as
+failing tests even though zero tests ran. The script installs with plain `adb` and
+drives `am instrument` directly. Pass `-s <serial>` to choose a device and `-c <class>`
+to run one test class.
+
+The frontend has its own suite, run by Node directly and surfaced through
+`ShellJsTest.kt`:
+
+```bash
+cd app && node --test src/test/js/shell.test.js
+```
+
+It extracts the `<script>` block out of `Shell.kt` and runs it against a small DOM
+stub, which is what lets the UI state machine be tested at all.
+
 ## Limitations
 
 - **OpenRouter only**: Other providers are not implemented. Only OpenRouter is supported.
