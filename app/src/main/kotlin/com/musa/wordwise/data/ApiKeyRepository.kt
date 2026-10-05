@@ -7,6 +7,32 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 /**
+ * Opens the encrypted store, wiping the file once if it cannot be created.
+ *
+ * Extracted for testability, and that is the whole reason it exists. The real
+ * store is built on `EncryptedSharedPreferences`, which **cannot be constructed on
+ * the JVM at all** — Robolectric ships no AndroidKeyStore shadow — so testing the
+ * recovery path through the real implementation was impossible. Injecting both
+ * halves makes the recovery itself provable as a plain unit test, while
+ * `ApiKeyRepositoryInstrumentedTest` covers the real keystore on a device.
+ *
+ * Without the wipe, an unreadable keyset would crash the app on every launch.
+ * With it, the user re-enters the key once.
+ *
+ * Deliberately retries only once: if a second `create` also fails, the error
+ * propagates rather than looping.
+ */
+internal fun openWithRecovery(
+    create: () -> SharedPreferences,
+    wipe: () -> Unit
+): SharedPreferences = try {
+    create()
+} catch (e: Exception) {
+    wipe()
+    create()
+}
+
+/**
  * Encrypted access to the OpenRouter API key.
  *
  * **Must be obtained through [get].** `EncryptedSharedPreferences` keeps an
@@ -22,20 +48,22 @@ class ApiKeyRepository private constructor(context: Context) {
     private val appContext = context.applicationContext
 
     private val prefs: SharedPreferences by lazy {
-        try {
-            createEncryptedPrefs()
-        } catch (e: Exception) {
-            // The keyset lives in the Android Keystore and never leaves the
-            // device, so prefs restored from a backup (or a corrupted keyset)
-            // cannot be decrypted. Wipe and start fresh — the user re-enters
-            // the key once instead of the app crashing on every launch.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                appContext.deleteSharedPreferences(PREFS_NAME)
-            } else {
-                appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit().clear().commit()
-            }
-            createEncryptedPrefs()
+        openWithRecovery(create = ::createEncryptedPrefs, wipe = ::wipePrefsFile)
+    }
+
+    /**
+     * Drops the stored file so a fresh keyset can be created.
+     *
+     * The master key lives in the Android Keystore and never leaves the device,
+     * so a prefs file restored from a backup — or one whose keyset is otherwise
+     * unreadable — cannot be decrypted.
+     */
+    private fun wipePrefsFile() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            appContext.deleteSharedPreferences(PREFS_NAME)
+        } else {
+            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().clear().commit()
         }
     }
 
