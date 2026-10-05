@@ -25,9 +25,11 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsControllerCompat
-import com.musa.wordwise.data.ApiKeyRepository
+import com.musa.wordwise.bridge.BridgeResult
+import com.musa.wordwise.bridge.EncryptedKeyStore
+import com.musa.wordwise.bridge.PrefsSettings
+import com.musa.wordwise.bridge.WwBridge
 import com.musa.wordwise.data.Prefs
-import com.musa.wordwise.network.ModelId
 import com.musa.wordwise.server.Themes
 import com.musa.wordwise.server.WwServer
 import java.net.InetSocketAddress
@@ -57,9 +59,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
 
-    // Shared with GrammarFixService so a key saved or removed in settings takes
-    // effect immediately instead of on next service start.
-    private val apiKeyRepository by lazy { ApiKeyRepository.get(this) }
+    /**
+     * Shared with `GrammarFixService` via the [ApiKeyRepository] singleton, so a
+     * key saved or removed in settings takes effect immediately instead of on the
+     * next service start.
+     */
+    private val bridge by lazy {
+        WwBridge(
+            keys = EncryptedKeyStore(this),
+            settings = PrefsSettings(this)
+        )
+    }
 
     /**
      * The in-flight `confirm()` awaiting an answer.
@@ -74,9 +84,15 @@ class MainActivity : AppCompatActivity() {
     private var pendingJsDialog: AlertDialog? = null
 
     private fun resolveJsConfirm(confirmed: Boolean) {
-        val result = pendingJsResult ?: return
+        // Clear both references unconditionally. Bailing out early when there is
+        // no pending result would couple the two fields: any path that ends up
+        // with a dialog but no result — a null JsResult from the WebView, a
+        // dismissed-then-rebuilt dialog — would leak the window reference
+        // forever. Resolution is the only part that is conditional.
+        val result = pendingJsResult
         pendingJsResult = null
         pendingJsDialog = null
+        if (result == null) return
         if (confirmed) result.confirm() else result.cancel()
     }
 
@@ -202,78 +218,42 @@ class MainActivity : AppCompatActivity() {
     /**
      * The one JS-to-native trust boundary.
      *
-     * Mutating methods return `""` on success and a user-facing message on
-     * failure, so the frontend can surface the reason without a second channel.
-     * They never return secret material: [hasApiKey] reports a boolean, and the
-     * key itself can only ever be written, never read back out.
+     * All decision-making lives in [WwBridge], where it is unit tested. This is
+     * only the JavaScript adapter: it converts a [BridgeResult] into the
+     * `""`-on-success string the frontend expects, and hops to the UI thread for
+     * the two methods that affect chrome.
      *
-     * Called on a WebView background thread, so anything touching the UI hops
-     * to the main thread explicitly. Preference and keystore access is
-     * thread-safe.
+     * `@JavascriptInterface` methods run on a WebView background thread, never
+     * the UI thread, so the hops below are required, not defensive.
      */
     inner class WwNativeBridge {
 
         // ---------- API key ----------
 
-        /**
-         * Whether a key is stored. Deliberately a boolean: the key is never
-         * readable from JS, so it cannot leak back out through the bridge,
-         * through the local server, or into a screenshot of the DOM.
-         */
         @JavascriptInterface
-        fun hasApiKey(): Boolean = apiKeyRepository.hasApiKey()
+        fun hasApiKey(): Boolean = bridge.hasApiKey()
 
-        /** Saves [key], replacing any existing one. `""` on success. */
         @JavascriptInterface
-        fun saveApiKey(key: String): String {
-            val trimmed = key.trim()
-            if (trimmed.isEmpty()) return "API key cannot be empty"
-            if (trimmed.length > 200) return "That does not look like an OpenRouter key"
-            apiKeyRepository.saveApiKey(trimmed)
-            return ""
-        }
+        fun saveApiKey(key: String): String = bridge.saveApiKey(key).asJsResult()
 
-        /**
-         * Deletes the stored key.
-         *
-         * Needed because the key is write-only: making it unreadable also removed
-         * the user's only in-app way to get rid of it, which would otherwise be
-         * clearing app data.
-         */
         @JavascriptInterface
-        fun clearApiKey(): String {
-            apiKeyRepository.clearApiKey()
-            return ""
-        }
+        fun clearApiKey(): String = bridge.clearApiKey().asJsResult()
 
         // ---------- model ----------
 
         @JavascriptInterface
-        fun getModel(): String = Prefs.getModel(this@MainActivity)
+        fun getModel(): String = bridge.getModel()
 
-        /** Validates and stores the model. Returns [ModelId]'s reason on reject. */
         @JavascriptInterface
-        fun setModel(raw: String): String =
-            when (val result = ModelId.validate(raw)) {
-                is ModelId.Result.Valid -> {
-                    Prefs.setModel(this@MainActivity, result)
-                    ""
-                }
-                is ModelId.Result.Invalid -> result.reason
-            }
+        fun setModel(raw: String): String = bridge.setModel(raw).asJsResult()
 
         // ---------- theme ----------
 
         @JavascriptInterface
-        fun getTheme(): String = Prefs.getTheme(this@MainActivity)
+        fun getTheme(): String = bridge.getTheme()
 
         @JavascriptInterface
-        fun setTheme(key: String): String {
-            if (key !in Themes.KEYS) return "Unknown theme"
-            Prefs.setTheme(this@MainActivity, key)
-            runOnUiThread { applyStatusBarColor(Themes.byKey(key).statusBar) }
-            return ""
-        }
+        fun setTheme(key: String): String = bridge.setTheme(key).applyStatusBar().asJsResult()
 
         // ---------- native chrome ----------
 
@@ -289,6 +269,24 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 Toast.makeText(this@MainActivity, R.string.toast_accessibility_hint, Toast.LENGTH_LONG).show()
             }
+        }
+
+        /** `""` on success, otherwise the reason to show the user. */
+        private fun BridgeResult.asJsResult(): String = when (this) {
+            is BridgeResult.Ok -> note
+            is BridgeResult.Err -> reason
+        }
+
+        /**
+         * Applies any status bar colour the result carries.
+         *
+         * The colour is returned by [WwBridge] rather than applied there, so the
+         * bridge logic never touches a view and stays unit testable.
+         */
+        private fun BridgeResult.applyStatusBar(): BridgeResult {
+            val hex = (this as? BridgeResult.Ok)?.statusBarColor ?: return this
+            runOnUiThread { if (!isDestroyed) applyStatusBarColor(hex) }
+            return this
         }
     }
 
