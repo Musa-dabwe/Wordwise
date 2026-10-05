@@ -9,6 +9,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import com.musa.wordwise.network.ModelInfo
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -183,16 +185,84 @@ class WwServerTest {
         assertEquals("no-referrer", h["Referrer-Policy"])
         assertEquals("nosniff", h["X-Content-Type-Options"])
 
-        val csp = assertNotNull(h["Content-Security-Policy"]).let { h["Content-Security-Policy"]!! }
+        val csp = h["Content-Security-Policy"]!!
         for (directive in listOf(
             "default-src 'self'",
             "frame-ancestors 'none'",
             "form-action 'none'",
             "base-uri 'none'",
-            "connect-src 'self'"
+            "connect-src 'self'",
+            "object-src 'none'"
         )) {
             assertTrue("CSP missing '$directive': $csp", csp.contains(directive))
         }
+    }
+
+    /**
+     * The point of moving the script and stylesheet into /assets: the page has no
+     * inline code, so `unsafe-inline` is no longer needed and the policy stops
+     * being decorative.
+     */
+    @Test
+    fun `csp does not allow inline script or style`() = testApplication {
+        serve()
+        val csp = client.get("/").headers["Content-Security-Policy"]!!
+        assertFalse("script-src must not allow inline script: $csp", csp.contains("script-src 'self' 'unsafe-inline'"))
+        assertFalse("script-src must not allow unsafe-inline: $csp", csp.contains("unsafe-inline"))
+        assertTrue("script-src must still allow same-origin scripts: $csp", csp.contains("script-src 'self'"))
+        assertTrue("style-src must still allow same-origin styles: $csp", csp.contains("style-src 'self'"))
+    }
+
+    /** The page must actually load its script and stylesheet from /assets. */
+    @Test
+    fun `the shell links its script and stylesheet as assets`() = testApplication {
+        serve()
+        val html = client.get("/").bodyAsText()
+        assertTrue("expected a stylesheet link", html.contains("""href="/assets/wordwise.css""""))
+        assertTrue("expected a script tag", html.contains("""src="/assets/wordwise.js""""))
+        assertFalse("no inline <style> should remain", html.contains("<style>"))
+        assertFalse("no inline <script> should remain", Regex("<script>(?s).*?</script>").containsMatchIn(html))
+    }
+
+    /**
+     * The theme catalogue is public presentation data. It moved out of the script
+     * so the script could become a static asset under a CSP without
+     * `unsafe-inline`.
+     */
+    @Test
+    fun `themes are served as public json`() = testApplication {
+        serve()
+        val response = client.get("/api/themes")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue("expected theme keys", body.contains("peach"))
+        assertTrue("expected css variables", body.contains("vars"))
+    }
+
+    /**
+     * Regression: the catalogue used to be emitted as a JavaScript object literal
+     * with bare identifier keys, which the client then fed to `response.json()`.
+     * That is not valid JSON, so the parse threw, the theme map stayed empty, and
+     * `wwApplyTheme` retried through an unresolved promise chain — spinning the
+     * event loop so hard the settings screen never painted.
+     *
+     * Asserting the body merely *contained* "vars" missed it. Parse it instead.
+     */
+    @Test
+    fun `the theme catalogue actually parses as json`() = testApplication {
+        serve()
+        val body = client.get("/api/themes").bodyAsText()
+
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+        val peach = parsed["peach"]!!.jsonObject
+        assertTrue("peach must expose a name", peach["name"]!!.jsonPrimitive.content.isNotBlank())
+        assertTrue("peach must expose a swatch", peach["swatch"]!!.jsonPrimitive.content.isNotBlank())
+        assertTrue(
+            "peach must expose css variables",
+            peach["vars"]!!.jsonObject.keys.any { it.startsWith("--") }
+        )
+        // Every theme in the catalogue must be present and well-formed.
+        assertEquals(Themes.ALL.size, parsed.size)
     }
 
     @Test

@@ -1,55 +1,45 @@
-// Extracts the inline <script> from Shell.kt (stubbing the Kotlin
-// interpolations), syntax-checks it with `node --check`, evals it under the
-// harness DOM, and asserts the shipped key-state/model/theme behaviors.
+// Loads the real frontend script from the APK assets, syntax-checks it with
+// `node --check`, evals it under the harness DOM, and asserts the shipped
+// key-state/model/theme behaviors.
+//
+// It used to regex the inline <script> out of Shell.kt and stub the Kotlin
+// interpolations by hand. The script is a real file now, so the test reads the
+// same bytes the device does.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 
 const { install, makeBridge } = require('./harness.js');
 
-function findShellKt() {
+function findScript() {
   const candidates = [
-    path.resolve(process.cwd(), 'src/main/kotlin/com/musa/wordwise/server/Shell.kt'),
-    path.resolve(__dirname, '../../main/kotlin/com/musa/wordwise/server/Shell.kt'),
+    path.resolve(process.cwd(), 'src/main/assets/web/wordwise.js'),
+    path.resolve(__dirname, '../../main/assets/web/wordwise.js'),
   ];
   for (const c of candidates) if (fs.existsSync(c)) return c;
-  throw new Error('Shell.kt not found; cwd=' + process.cwd());
+  throw new Error('wordwise.js not found; cwd=' + process.cwd());
 }
 
-// Same extraction the repo history did by hand, now codified.
-function extractShellJs() {
-  const src = fs.readFileSync(findShellKt(), 'utf8');
-  const m = src.match(/return """([\s\S]*?)"""/);
-  assert.ok(m, 'raw string body not found in Shell.kt');
-  const raw = m[1]
-    .split('${Themes.styleVars(themeKey)}').join('')
-    .split('${Themes.toJs()}').join('{}')
-    .split('${jsonStr(themeKey)}').join('"peach"')
-    .split('${jsonStr(ModelId.DEFAULT)}').join('"openrouter/free"');
-  const sm = raw.match(/<script>([\s\S]*?)<\/script>/);
-  assert.ok(sm, 'inline <script> block not found');
-  return sm[1];
-}
+const SCRIPT_PATH = findScript();
+const JS = fs.readFileSync(SCRIPT_PATH, 'utf8');
 
-const JS = extractShellJs();
+// The script must survive the same check CI would run, and must not contain any
+// Kotlin interpolation: it is a static asset, not a template.
+test('the shipped script parses and has no server-side templating left', () => {
+  execFileSync(process.execPath, ['--check', SCRIPT_PATH], { stdio: 'pipe' });
+  assert.ok(!/\$\{/.test(JS), 'script must not contain Kotlin interpolation');
+});
+
 
 // Fake timers for the whole file: several behaviors (wwSavedFeedback's 1700ms
 // reset, wwToast) race a setTimeout, and tests tick explicitly. Enabling once
 // avoids per-test enable/restore bookkeeping.
 const { mock } = require('node:test');
 mock.timers.enable({ apis: ['setTimeout'] });
-
-// node --check must pass, or every later failure would be a syntax error.
-test('extracted script parses (node --check)', () => {
-  const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wwjs-')), 'shell.js');
-  fs.writeFileSync(tmp, JS);
-  execFileSync(process.execPath, ['--check', tmp]); // throws on syntax error
-});
 
 let ctx;
 function loadScript(bridge) {
@@ -259,7 +249,8 @@ test('13 wwSetTheme updates bridge, swatch, name, checkmark; unknown key errors'
   // unknown key: bridge returns error, nothing is applied
   wwSetTheme('nope');
   assert.strictEqual($('toast').textContent, 'Unknown theme');
-  assert.strictEqual(window.WW.theme, 'slate');
+  // The selected theme now rides on <body> so the script needs no templating.
+  assert.strictEqual(ctx.document.body.dataset.theme, 'slate');
   assert.strictEqual($('theme-name').textContent, 'Slate');
 });
 

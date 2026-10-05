@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.io.File
 
 /**
  * Regression guards for the server-rendered screens in [Views].
@@ -20,8 +21,23 @@ import org.junit.Test
  */
 class ViewsTest {
 
-    /** The shipped client-side script, as the WebView actually receives it. */
-    private val script: String get() = Shell.page("peach")
+    /**
+     * The shipped client-side script.
+     *
+     * Read from the asset the APK actually bundles, rather than scraped out of
+     * `Shell.page`. It used to be inlined in a Kotlin raw string, which is what
+     * this extraction removed: the script is now a real file that can be read
+     * directly and syntax-checked on its own.
+     */
+    private val script: String by lazy {
+        val candidates = listOf(
+            File("src/main/assets/web/wordwise.js"),
+            File("app/src/main/assets/web/wordwise.js")
+        )
+        val file = candidates.firstOrNull { it.isFile }
+            ?: throw AssertionError("wordwise.js not found; tried $candidates")
+        file.readText()
+    }
 
     // ---- 1. the key is not a parameter, and no key material is rendered ----
 

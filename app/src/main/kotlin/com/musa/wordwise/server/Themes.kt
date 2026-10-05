@@ -95,8 +95,27 @@ object Themes {
         byKey(key).vars.entries.joinToString(";") { (k, v) -> "$k:$v" }
 
     /** The themes serialized as a JS object literal for client-side switching. */
-    fun toJs(): String = ALL.joinToString(",", prefix = "{", postfix = "}") { t ->
-        val vars = t.vars.entries.joinToString(",") { (k, v) -> "${jsonStr(k)}:${jsonStr(v)}" }
-        "${jsonStr(t.key)}:{name:${jsonStr(t.name)},swatch:${jsonStr(t.swatch)},statusBar:${jsonStr(t.statusBar)},vars:{$vars}}"
+    /**
+     * The catalogue as **JSON**, served from `GET /api/themes`.
+     *
+     * Every key is quoted. This used to be a JavaScript object literal with bare
+     * identifiers (`{peach:{name:...}}`) interpolated into the page, which is
+     * valid JS but **not valid JSON** — and once the script became a real asset
+     * the client parses this with `response.json()`, which rejects it. Every
+     * value is a display colour, so nothing secret is involved; the whole point
+     * is that the payload has to survive a JSON parser.
+     */
+    fun toJson(): String = buildString {
+        append('{')
+        ALL.forEachIndexed { index, t ->
+            if (index > 0) append(',')
+            val vars = t.vars.entries.joinToString(",") { (k, v) -> "${jsonStr(k)}:${jsonStr(v)}" }
+            append(jsonStr(t.key)).append(":{")
+            append("\"name\":").append(jsonStr(t.name)).append(',')
+            append("\"swatch\":").append(jsonStr(t.swatch)).append(',')
+            append("\"statusBar\":").append(jsonStr(t.statusBar)).append(',')
+            append("\"vars\":{").append(vars).append("}}")
+        }
+        append('}')
     }
 }

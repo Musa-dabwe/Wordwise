@@ -87,12 +87,17 @@ internal fun Application.installLocalGuard(expectedOrigin: String) {
 
             // Never let a third party frame this origin.
             call.response.header("X-Frame-Options", "DENY")
+            // No 'unsafe-inline' for scripts or styles: both the stylesheet and
+            // the script are served from /assets, so the page has no inline
+            // code at all. That is what makes the policy meaningful rather than
+            // decorative.
             call.response.header(
                 "Content-Security-Policy",
                 "default-src 'self'; frame-ancestors 'none'; " +
-                    "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+                    "script-src 'self'; style-src 'self'; " +
                     "connect-src 'self'; img-src 'self' data:; " +
-                    "font-src 'self'; base-uri 'none'; form-action 'none'"
+                    "font-src 'self'; base-uri 'none'; form-action 'none'; " +
+                    "object-src 'none'"
             )
             call.response.header("Referrer-Policy", "no-referrer")
             call.response.header("X-Content-Type-Options", "nosniff")
@@ -156,6 +161,19 @@ internal fun Application.wordWiseModule(env: ServerEnvironment, expectedOrigin: 
                 """{"enabled":${env.isServiceEnabled()}}""",
                 ContentType.Application.Json
             )
+        }
+
+        /**
+         * The pastel theme catalogue.
+         *
+         * Public, non-secret presentation data. It lives here rather than being
+         * interpolated into the script so the script can be a static asset and
+         * the CSP needs no `unsafe-inline`. The initial theme's CSS variables are
+         * already applied to `<html>` server-side, so the client fetches this
+         * lazily and there is no flash of the wrong colours.
+         */
+        get("/api/themes") {
+            call.respondText(Themes.toJson(), ContentType.Application.Json)
         }
 
         // ---------- public model catalog ----------

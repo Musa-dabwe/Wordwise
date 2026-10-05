@@ -5,9 +5,14 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Runs the Node test suite for the inline UI script. The JS tests extract the
- * <script> from Shell.kt themselves (stubbing the Kotlin interpolations), so
- * this wrapper only needs to invoke Node correctly and surface its output.
+ * Runs the Node test suite for the UI script.
+ *
+ * The script is a real asset (`app/src/main/assets/web/wordwise.js`) rather than
+ * inline in a Kotlin raw string, so these tests read the same bytes the device
+ * loads. That is also why the Content Security Policy no longer needs
+ * `script-src 'unsafe-inline'`.
+ *
+ * This wrapper only invokes Node and surfaces its output.
  */
 class ShellJsTest {
 

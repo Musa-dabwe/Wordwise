@@ -130,6 +130,9 @@ function freshDocument() {
   const docEl = new El('html');
   const head = new El('head');
   const body = new El('body');
+  // The shipped script reads its theme and default model from <body> data
+  // attributes (Shell.page renders them), so the stub needs a dataset.
+  body.dataset = { theme: 'peach', defaultModel: 'openrouter/free' };
   docEl.appendChild(head);
   docEl.appendChild(body);
 
